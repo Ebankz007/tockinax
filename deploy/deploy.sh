@@ -133,12 +133,19 @@ REMOTE="$(git rev-parse "origin/$BRANCH")"
 
 # ---- nothing new -----------------------------------------------------------
 if [ "$LOCAL" = "$REMOTE" ]; then
-  if healthy; then
+  if ! healthy; then
+    log "no new commit but health check failed - restarting processes"
+    pm2 restart "$API_NAME" || true
+    pm2 restart "$WEB_NAME" || true
     exit 0
   fi
-  log "no new commit but health check failed - restarting processes"
-  pm2 restart "$API_NAME" || true
-  pm2 restart "$WEB_NAME" || true
+  # A 200 does not prove the right build is being served. If the running process
+  # predates the current build it will happily keep answering with old HTML.
+  SHA_NOW="$(git rev-parse --short HEAD)"
+  if ! curl -sf --max-time 15 "$WEB_HEALTH" | grep -q "$SHA_NOW"; then
+    log "serving a build without marker ${SHA_NOW} - restarting ${WEB_NAME}"
+    restart_one "$WEB_NAME" || true
+  fi
   exit 0
 fi
 
