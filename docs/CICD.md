@@ -130,7 +130,7 @@ checks, no direct pushes. CD only ever deploys `main`/tags.
 ### 3.5 On the host (once)
 - Docker Engine + Compose plugin.
 - A `.env` file (from `.env.example`) with **real** secrets — never in the repo.
-- Caddy/Nginx in front, TLS terminated there (`docs/DEPLOYMENT.md` §1).
+- Apache in front, TLS terminated there (`docs/DEPLOYMENT.md` §1).
 - `docker login ghcr.io` is performed by the deploy job each run.
 
 ---
@@ -213,7 +213,7 @@ The live boxes (Aglotrends, COPINEX, AmplifiedTraders) are all the same shape:
 | Layer | Reality |
 |---|---|
 | Panel | **aaPanel** at `192.227.176.232:21874` (IP-whitelisted) |
-| Web | Nginx/Apache reverse proxy → `127.0.0.1:<port>` |
+| Web | Apache reverse proxy → `127.0.0.1:<port>` |
 | Process | **PM2** (`pm2 save` + `pm2-root` enabled so it survives reboot) |
 | DB | PostgreSQL 16, one database per site |
 | Deploy | a server-side cron (every 2 min) running `deploy.sh`, gated on CI status |
@@ -247,7 +247,7 @@ parity and for a future container host — they are simply not the deploy path.
 - **No linter.** There is no ESLint/Prettier config. Add ESLint (flat config) +
   a `lint` job once the rule set is agreed; don't bolt it on mid-release.
 - **The CD deploy job targets the wrong platform** (see §6). Rewrite for
-  aaPanel/Nginx+PM2 before enabling. Until then `DEPLOY_ENABLED` stays unset and
+  aaPanel/Apache+PM2 before enabling. Until then `DEPLOY_ENABLED` stays unset and
   the job is skipped.
 - **No staging environment.** CD goes straight to `production`. Add a
   `staging` environment + second stack before the first real release.

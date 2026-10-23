@@ -10,8 +10,14 @@ function buildApp() {
   app.disable('x-powered-by');
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    // Explicit HSTS: 180 days, subdomains, preload. Browsers enforce HTTPS only.
-    hsts: { maxAge: 15552000, includeSubDomains: true, preload: true },
+    // HSTS: 180 days. includeSubDomains and preload are deliberately OFF.
+    // Browsers apply an HSTS policy to the whole host, and `includeSubDomains`
+    // would force HTTPS on www.tockinax.com — which the current certificate
+    // does not cover, so every visitor who reached the apex would then hit a
+    // hard TLS error on www. Re-enable both only after a cert reissue that adds
+    // the `www` SAN, and only submit for preload once the domain is settled
+    // (preload removal takes months and is effectively a one-way door).
+    hsts: { maxAge: 15552000, includeSubDomains: false, preload: false },
   }));
   app.use(cookieParser());
   app.use(express.json({ limit: '256kb' }));
