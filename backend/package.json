@@ -38,10 +38,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.24.2",
-    "jest": "^29.7.0",
+    "drizzle-kit": "^0.31.11",
+    "jest": "^30.5.2",
     "nodemon": "^3.1.4",
-    "supertest": "^6.3.4"
+    "supertest": "^7.3.1"
   },
   "jest": {
     "testEnvironment": "node",
