@@ -24,10 +24,19 @@ summary:focus-visible {
 
 /* ---- Primitives (dark fintech) ---- */
 .card {
-  @apply bg-surface border border-line/10 rounded-xl shadow-sm p-5;
+  @apply bg-surface border border-edge/70 rounded-2xl p-5;
 }
 .card-raised {
-  @apply bg-coal border border-line/10 rounded-xl shadow-sm p-5;
+  @apply bg-coal border border-edge/70 rounded-2xl p-5;
+}
+/* Numbers always align — tabular figures for every money value. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+/* Section eyebrow label */
+.eyebrow {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-semibold text-gold;
 }
 .btn {
   @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium border border-transparent transition;

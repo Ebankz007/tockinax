@@ -4,7 +4,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // TOCKINAX brand system — premium dark fintech
+        // TOCKINAX brand system — premium dark fintech (Binance-adjacent).
         // Gold scale keeps the legacy `brand-*` classes working (remapped to gold).
         brand: {
           50: '#FEF9E7',
@@ -18,20 +18,28 @@ module.exports = {
           800: '#7A5C03',
           900: '#4A3802',
         },
-        ink: '#0B0E11', // Deep Black backgrounds
-        coal: '#12161B', // raised dark panel
-        surface: '#1F2329', // Dark Gray surfaces
-        surface2: '#2B3139', // hover / inset surfaces
-        gold: '#F0B90B', // TOCKINAX Yellow — primary CTA / accents
-        goldhover: '#FCD535', // Gold hover — primary CTA hover state
-        success: '#0ECB81', // Success green — success / completed states
+        ink: '#0B0E11', // page background
+        coal: '#12161B', // raised band (footer, nav)
+        surface: '#181A20', // card background
+        surface2: '#22262E', // inset / hover
+        edge: '#2B313A', // explicit card border
+        gold: '#F0B90B', // primary CTA / accent
+        goldhover: '#FCD535', // CTA hover
         golddeep: '#C99406',
-        mist: '#6D7B8D', // Slate secondary text
-        line: '#E5E7EB', // Light — borders (used at low opacity on dark)
+        success: '#0ECB81',
+        danger: '#F6465D',
+        mist: '#848E9C', // secondary text
+        bright: '#EAECEF', // primary text
+        line: '#E5E7EB', // borders (used at low opacity on dark)
       },
       fontFamily: {
-        display: ['var(--font-display)', 'Montserrat', 'Sora', 'sans-serif'],
-        sans: ['var(--font-body)', 'Inter', 'system-ui', 'sans-serif'],
+        // One family for both display and body — Plus Jakarta Sans.
+        display: ['var(--font-body)', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-body)', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      boxShadow: {
+        gold: '0 8px 24px -8px rgba(240, 185, 11, 0.45)',
       },
     },
   },

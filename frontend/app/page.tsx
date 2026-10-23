@@ -1,94 +1,284 @@
-'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import Logo from '@/components/Logo';
 import RiskStrip from '@/components/RiskStrip';
-import { LiveChip, SimBadge } from '@/components/Badges';
-import { fetchModule } from '@/lib/api';
+import LockSimulator from '@/components/LockSimulator';
+import {
+  STAGES,
+  REFERRAL_CATEGORIES,
+  PLATFORM_RULES,
+  bpsToPct,
+  usdt,
+} from '@/lib/plan';
 
-function useModuleStatus(path: string): boolean | null {
-  const [live, setLive] = useState<boolean | null>(null);
-  useEffect(() => {
-    let on = true;
-    fetchModule<unknown>(path).then((r) => {
-      if (on) setLive(r.state === 'live');
-    });
-    return () => {
-      on = false;
-    };
-  }, [path]);
-  return live;
-}
+const KPI = [
+  { value: '1.0%', unit: '/ day', label: 'Target value appreciation', tone: 'text-gold' },
+  { value: '7 & 14', unit: 'days', label: 'Fixed token lock terms', tone: 'text-bright' },
+  { value: '5', unit: 'stages', label: 'Progressive participation tiers', tone: 'text-success' },
+  { value: '5', unit: 'gens', label: 'Referral generations, when funded', tone: 'text-[#3B82F6]' },
+];
+
+const STEPS = [
+  {
+    n: '01',
+    title: 'Register & activate',
+    body: 'Create an account and activate membership. Activation is a recorded 20 USDT fee — nothing is charged until fees are switched on.',
+  },
+  {
+    n: '02',
+    title: 'Lock a cycle',
+    body: 'Choose 7 days (+7% target) or 14 days (+14% target) at 1% per day, simple and non-compounded. Your stage sets the purchase ceiling.',
+  },
+  {
+    n: '03',
+    title: 'List at maturity',
+    body: 'At maturity the position auto-lists at its target price. Multiple buyers can take small portions; you settle per portion. A listing is not a sale.',
+  },
+  {
+    n: '04',
+    title: 'Advance a stage',
+    body: 'Build 42 cumulative lock days — 6 × 7-day or 3 × 14-day cycles — to move up. Higher stages widen limits and generations.',
+  },
+];
 
 export default function Home() {
-  const tokensLive = useModuleStatus('/tokens/definitions');
-  const marketLive = useModuleStatus('/tokenmarket/listings');
-  const depositsLive = useModuleStatus('/deposits/mine');
-
   return (
-    <div className="space-y-6">
-      <section className="card hero-glow space-y-4">
-        <div className="flex items-center gap-3">
-          <Logo size={44} showWordmark={false} />
-          <p className="badge-sim">
-            SIM <span className="font-normal">SIMULATED pilot — no real funds</span>
+    <div className="space-y-14 sm:space-y-20">
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="hero-glow relative overflow-hidden rounded-3xl border border-edge/70 bg-surface px-6 py-12 sm:px-10 sm:py-16">
+        <div className="relative mx-auto max-w-3xl text-center">
+          <span className="eyebrow">Simulated pilot — no real funds</span>
+
+          <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-bright sm:text-5xl lg:text-6xl">
+            Trade. Connect.
+            <br />
+            <span className="text-gold">Grow Globally.</span>
+          </h1>
+
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-mist sm:text-lg">
+            Purchase pilot tokens in USDT, lock them for{' '}
+            <strong className="font-semibold text-bright">7 or 14 days</strong>, then list at
+            maturity for partial fills. Every step is simulated — and every target price still
+            needs a willing buyer.
           </p>
-        </div>
-        <h1 className="font-display text-4xl font-bold leading-tight text-white">
-          Trade. Connect. <span className="text-gold">Grow Globally.</span>
-        </h1>
-        <p className="max-w-2xl text-mist">
-          TOCKINAX pilot tokens: purchase → timed lock → maturity → auto-listing on the
-          token market → partial fills → settlement. Every step is simulated — no real funds move.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/tokens" className="btn-primary">
-            Buy &amp; lock tokens
-          </Link>
-          <Link href="/token-market" className="btn-secondary">
-            Explore token market
-          </Link>
-          <Link href="/how-it-works" className="btn-secondary">
-            How it works
-          </Link>
-        </div>
-        <div className="flex flex-wrap gap-2" aria-label="Live API status">
-          <LiveChip live={tokensLive} what="Tokens API" />
-          <LiveChip live={marketLive} what="Token market API" />
-          <LiveChip live={depositsLive} what="Deposits API" />
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/register"
+              className="rounded-xl bg-gold px-6 py-3 text-sm font-bold text-black shadow-gold transition-colors hover:bg-goldhover"
+            >
+              Create an account
+            </Link>
+            <Link
+              href="/token-market"
+              className="rounded-xl border border-edge/70 bg-ink px-6 py-3 text-sm font-semibold text-bright transition-colors hover:border-gold/40 hover:bg-white/5"
+            >
+              Explore the token market
+            </Link>
+          </div>
+
+          <p className="mt-6 font-mono text-xs text-mist tnum">
+            Stage 1 from 50 USDT · 42 cumulative lock days per stage
+          </p>
         </div>
       </section>
 
-      <RiskStrip />
-
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" aria-label="How TOCKINAX works">
-        {[
-          ['1. Register & Activate', 'Create your account and activate membership. SIMULATED pilot — no real funds.'],
-          ['2. Select Token Lock', 'Lock 7 days (+7%) or 14 days (+14%) — 1%/day, non-compounded. Example: 100 → TARGET 107 / 114. Targets, not guarantees.'],
-          ['3. Auto Resale on Market', 'At maturity your position auto-lists at its target price. Multiple buyers can take small portions; you receive USDT per portion bought. Automatic listing is not automatic sale — unsold stays unsold.'],
-          ['4. Advance & Earn', 'Build 42 cumulative days (6×7 or 3×14) to advance Stage 1→5 and unlock up to 5 generations. Commissions pay only on verified sales after approval.'],
-        ].map(([t, d]) => (
-          <div className="card" key={t}>
-            <h2 className="font-display font-bold text-white">{t}</h2>
-            <p className="mt-1 text-sm text-mist">{d}</p>
+      {/* ── KPI strip ────────────────────────────────────────── */}
+      <section aria-label="Platform at a glance" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {KPI.map((k) => (
+          <div
+            key={k.label}
+            className="rounded-2xl border border-edge/70 bg-surface p-5 text-center"
+          >
+            <p className={`font-mono text-2xl font-extrabold tnum sm:text-3xl ${k.tone}`}>
+              {k.value}
+              <span className="ml-1 text-xs font-medium text-mist">{k.unit}</span>
+            </p>
+            <p className="mt-1.5 text-xs leading-snug text-mist">{k.label}</p>
           </div>
         ))}
       </section>
 
-      <section className="card space-y-2">
-        <h2 className="font-display font-bold text-white">
-          Target examples <SimBadge />
+      <RiskStrip />
+
+      {/* ── How it works ─────────────────────────────────────── */}
+      <section aria-label="How TOCKINAX works">
+        <div className="mb-8 text-center">
+          <span className="eyebrow">The mechanism</span>
+          <h2 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
+            Four steps, one cycle
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-mist">
+            From registration to settlement, every movement is recorded and auditable.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {STEPS.map((s) => (
+            <div key={s.n} className="rounded-2xl border border-edge/70 bg-surface p-5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-mono text-sm font-extrabold text-black tnum">
+                {s.n}
+              </div>
+              <h3 className="mt-4 font-display text-base font-bold text-bright">{s.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-mist">{s.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Simulator + cycle targets ────────────────────────── */}
+      <section aria-label="Lock simulator" className="grid gap-4 lg:grid-cols-2">
+        <LockSimulator />
+
+        <div className="space-y-4">
+          {([7, 14] as const).map((d) => {
+            const mult = d === 7 ? PLATFORM_RULES.sevenDayTarget : PLATFORM_RULES.fourteenDayTarget;
+            return (
+              <div key={d} className="rounded-2xl border border-edge/70 bg-surface p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-base font-bold text-bright">{d}-day cycle</h3>
+                  <span className="badge-sim">Target</span>
+                </div>
+                <p className="mt-3 font-mono text-sm text-mist tnum">
+                  100.00 <span className="text-mist">→</span>{' '}
+                  <span className="text-lg font-bold text-gold">{usdt(100 * mult)}</span>{' '}
+                  <span className="text-success">(+{((mult - 1) * 100).toFixed(0)}%)</span>
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-mist">
+                  {d} days at 1% per day, simple and non-compounded. The target is a listing
+                  price, not a payout — it is only realised if a buyer takes the position.
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Stages ───────────────────────────────────────────── */}
+      <section aria-label="Participation stages">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <span className="eyebrow">Progression</span>
+            <h2 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
+              Five stages
+            </h2>
+            <p className="mt-2 max-w-xl text-sm text-mist">
+              Every stage requires the same 42 cumulative lock days — 6 × 7-day or 3 × 14-day
+              cycles. What changes is the ceiling and how many generations you can qualify for.
+            </p>
+          </div>
+          <Link href="/stages" className="text-sm font-semibold text-gold hover:underline">
+            Full stage table →
+          </Link>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {STAGES.map((s) => (
+            <div
+              key={s.stage}
+              className="rounded-2xl border border-edge/70 bg-surface p-4 transition-colors hover:border-gold/30"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: s.accent }}
+                  aria-hidden="true"
+                />
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-mist tnum">
+                  Stage {s.stage}
+                </p>
+              </div>
+              <h3 className="mt-1.5 font-display text-base font-bold text-bright">{s.name}</h3>
+              <p className="mt-2 font-mono text-xs text-mist tnum">
+                {usdt(s.minBuy, 0)} – {usdt(s.maxBuy, 0)} USDT
+              </p>
+              <dl className="mt-3 space-y-1 text-[11px] text-mist">
+                <div className="flex justify-between gap-2">
+                  <dt>Generations</dt>
+                  <dd className="font-mono font-semibold text-bright tnum">{s.generations}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt>Upgrade</dt>
+                  <dd className="font-mono font-semibold text-bright tnum">
+                    {s.upgradeFee === 0 ? '—' : `${usdt(s.upgradeFee, 0)}`}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt>Renewal</dt>
+                  <dd className="font-mono font-semibold text-bright tnum">{usdt(s.renewalFee, 0)}</dd>
+                </div>
+              </dl>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Referral categories ──────────────────────────────── */}
+      <section aria-label="Referral compensation categories">
+        <div className="mb-6">
+          <span className="eyebrow">Compensation</span>
+          <h2 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
+            Eight approved categories
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-mist">
+            Categories are defined and versioned, but <strong className="text-bright">none are
+            active</strong>. A category pays only after it is approved and funded, and only on
+            verified sales — never on recruitment.
+          </p>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-edge/70 bg-surface">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-edge/70 text-left text-[11px] uppercase tracking-wider text-mist">
+                <th className="px-4 py-3 font-semibold">Category</th>
+                <th className="hidden px-4 py-3 font-semibold sm:table-cell">Qualifying basis</th>
+                <th className="px-4 py-3 font-semibold">Scope</th>
+                <th className="px-4 py-3 text-right font-semibold">Rate</th>
+                <th className="px-4 py-3 text-right font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REFERRAL_CATEGORIES.map((c) => (
+                <tr key={c.id} className="border-b border-edge/40 last:border-0">
+                  <td className="px-4 py-3 font-medium text-bright">{c.name}</td>
+                  <td className="hidden px-4 py-3 text-xs text-mist sm:table-cell">{c.basis}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-mist">{c.scope}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-bright tnum">
+                    {bpsToPct(c.rateBps)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="rounded-full border border-edge/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mist">
+                      Inactive
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── Closing CTA ──────────────────────────────────────── */}
+      <section className="rounded-3xl border border-gold/25 bg-gradient-to-br from-gold/[0.08] to-transparent px-6 py-12 text-center sm:px-10">
+        <h2 className="font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
+          Start with a simulated cycle
         </h2>
-        <p className="text-sm text-mist">
-          7-day cycle: purchase 100 → <strong className="text-gold">TARGET 107</strong> · 14-day
-          cycle: purchase 100 → <strong className="text-gold">TARGET 114</strong>. Simple math on the
-          sticker price — not a return, not a promise. Target prices are not guaranteed — sale
-          requires a willing buyer; unsold stays unsold.
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-mist">
+          Create an account, activate, and run a 7-day lock end to end. Nothing moves real money
+          while the pilot is in this state.
         </p>
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/tokens" className="text-gold underline">Token cycles →</Link>
-          <Link href="/dashboard" className="text-gold underline">Member dashboard →</Link>
-          <Link href="/risk" className="text-gold underline">Risk disclosure →</Link>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/register"
+            className="rounded-xl bg-gold px-6 py-3 text-sm font-bold text-black shadow-gold transition-colors hover:bg-goldhover"
+          >
+            Create an account
+          </Link>
+          <Link
+            href="/how-it-works"
+            className="rounded-xl border border-edge/70 bg-ink px-6 py-3 text-sm font-semibold text-bright transition-colors hover:border-gold/40"
+          >
+            Read how it works
+          </Link>
         </div>
       </section>
     </div>
