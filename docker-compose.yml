@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tockinax-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tockinax_user
+      POSTGRES_PASSWORD: CHANGE_ME_DEV_ONLY
+      POSTGRES_DB: tockinax_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - tockinax-pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: tockinax-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - tockinax-redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+volumes:
+  tockinax-pgdata:
+  tockinax-redisdata:

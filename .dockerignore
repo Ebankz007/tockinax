@@ -1,0 +1,21 @@
+# Root build context is "." (both Dockerfiles COPY the root manifests).
+# Without this file, `docker build .` ships ~700 MB of node_modules to the daemon.
+.git
+.github
+.gitignore
+**/node_modules
+node_modules
+**/.next
+.next
+**/coverage
+coverage
+*.log
+.env
+.env.*
+!.env.example
+!.env.production.example
+backend/uploads-private
+backend/storage
+docs
+deploy
+*.md

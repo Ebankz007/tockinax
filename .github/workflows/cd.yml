@@ -1,0 +1,166 @@
+name: cd
+
+# Continuous delivery for TOCKINAX.
+#
+# Flow:
+#   push to main / tag v*  ->  build + push images to GHCR
+#                          ->  deploy job (INERT until DEPLOY_ENABLED=true)
+#
+# The deploy job is intentionally gated:
+#   * `environment: production`  -> add required reviewers in GitHub repo settings
+#     so no money-adjacent release ships without a human approval.
+#   * `if: vars.DEPLOY_ENABLED == 'true'` -> stays skipped until you provision a
+#     host and set the repo variable + secrets (see docs/CICD.md).
+#
+# Required repo VARIABLES:
+#   DEPLOY_ENABLED   = "true"            (flips the deploy job on)
+#   PUBLIC_API_URL   = https://api.tockinax.com
+# Required repo SECRETS (only when DEPLOY_ENABLED=true):
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+#
+# Images are published as:
+#   ghcr.io/<owner>/<repo>-backend:<sha12|tag>
+#   ghcr.io/<owner>/<repo>-frontend:<sha12|tag>
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: build & push images
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-backend:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}-frontend:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: deploy (manual approval)
+    needs: images
+    runs-on: ubuntu-latest
+    environment: production
+    if: vars.DEPLOY_ENABLED == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ship compose file to host
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          REMOTE_DIR: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          scp -i ~/.ssh/deploy_key docker-compose.prod.yml "$USER@$HOST:$REMOTE_DIR/"
+
+      - name: Pull images, migrate, roll out
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          REMOTE_DIR: ${{ secrets.DEPLOY_PATH }}
+          TAG: ${{ needs.images.outputs.tag }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -i ~/.ssh/deploy_key "$USER@$HOST" \
+            REMOTE_DIR="$REMOTE_DIR" TAG="$TAG" GHCR_USER="$GHCR_USER" \
+            GHCR_TOKEN="$GHCR_TOKEN" REPO="${{ github.repository }}" \
+            PUBLIC_API_URL="$PUBLIC_API_URL" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_DIR"
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+          export BACKEND_IMAGE="ghcr.io/${REPO}-backend:${TAG}"
+          export FRONTEND_IMAGE="ghcr.io/${REPO}-frontend:${TAG}"
+
+          # Pull the new images, then apply forward-only migrations BEFORE the
+          # new app containers start serving.
+          docker compose -f docker-compose.prod.yml pull backend frontend
+          docker compose -f docker-compose.prod.yml run --rm backend node db/migrate.cjs
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+          docker image prune -f
+          echo "Deployed ${TAG}"
+          REMOTE
+
+      - name: Post-deploy health check
+        env:
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if curl -fsS "$PUBLIC_API_URL/healthz" | grep -q '"ok":true'; then
+              echo "healthz OK"; exit 0
+            fi
+            echo "waiting for $PUBLIC_API_URL ... ($i/12)"; sleep 5
+          done
+          echo "health check FAILED"; exit 1

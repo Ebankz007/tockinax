@@ -1,0 +1,45 @@
+// PM2 ecosystem for Windows prod (no-Docker path). Run from repo root: pm2 start deploy/windows/ecosystem.config.js
+// Requires: npm i -g pm2. Logs: ./logs/. Boot persistence via Task Scheduler (see runbook §4).
+module.exports = {
+  apps: [
+    {
+      name: 'tockinax-backend',
+      cwd: './backend',
+      script: 'src/server.js',
+      instances: 2,
+      exec_mode: 'cluster',
+      env_production: { NODE_ENV: 'production', PORT: 5070 },
+      max_memory_restart: '512M',
+      exp_backoff_restart_delay: 3000,
+      error_file: '../logs/backend-err.log',
+      out_file: '../logs/backend-out.log',
+      time: true,
+    },
+    {
+      name: 'tockinax-frontend',
+      cwd: './frontend',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start -p 3001',
+      instances: 1,
+      exec_mode: 'fork',
+      env_production: { NODE_ENV: 'production', PORT: 3001 },
+      max_memory_restart: '512M',
+      exp_backoff_restart_delay: 3000,
+      error_file: '../logs/frontend-err.log',
+      out_file: '../logs/frontend-out.log',
+      time: true,
+    },
+    {
+      name: 'tockinax-sweeper',
+      cwd: './backend',
+      script: 'src/workers/sweeper.cjs',
+      instances: 1,
+      exec_mode: 'fork',
+      cron_restart: '*/2 * * * *',
+      env_production: { NODE_ENV: 'production' },
+      error_file: '../logs/sweeper-err.log',
+      out_file: '../logs/sweeper-out.log',
+      time: true,
+    },
+  ],
+};

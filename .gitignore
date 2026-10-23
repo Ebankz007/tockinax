@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.next/
+logs/
+backend/uploads-private/
+backend/storage/
+.env
+.env.production
+*.log
+*.dump
+.DS_Store

@@ -1,0 +1,48 @@
+{
+  "name": "tockinax-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node db/migrate.cjs",
+    "db:seed": "node db/seed.cjs",
+    "db:studio": "drizzle-kit studio",
+    "test": "jest --runInBand",
+    "test:live": "node live-smoke.cjs",
+    "sweeper": "node src/workers/sweeper.cjs",
+    "sweeper:once": "node src/workers/sweeper.cjs --once",
+    "admin:create": "node src/scripts/admin-create.cjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.33.0",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.14",
+    "pg": "^8.12.0",
+    "speakeasy": "^2.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.24.2",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^6.3.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 15000,
+    "testMatch": ["**/tests/**/*.test.js"]
+  }
+}

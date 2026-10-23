@@ -1,0 +1,9 @@
+# Caddy reverse-proxy sample (TLS automatic). Site: WEBSITE_DOMAIN (tockinax.com).
+# Site: https://tockinax.com -> frontend:3001 ; API: https://api.tockinax.com -> backend:5070
+# Run: caddy run --config Caddyfile (or `caddy reverse-proxy` for a 1-line start).
+tockinax.com {
+  reverse_proxy 127.0.0.1:3001
+}
+api.tockinax.com {
+  reverse_proxy 127.0.0.1:5070
+}

@@ -1,0 +1,73 @@
+# Production compose: backend + frontend + postgres + redis.
+# Secrets ONLY via env_file (.env copied from .env.example with real values).
+# Never commit .env. See docs/DEPLOYMENT.md.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tockinax_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-tockinax_prod}
+    volumes:
+      - tockinax-prod-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-tockinax_prod}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - tockinax-prod-redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    # CI/CD sets BACKEND_IMAGE to the GHCR tag; local use falls back to a build.
+    image: ${BACKEND_IMAGE:-tockinax-backend:local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: always
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5070
+    ports:
+      - "5070:5070"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    # CI/CD sets FRONTEND_IMAGE to the GHCR tag; local use falls back to a build.
+    image: ${FRONTEND_IMAGE:-tockinax-frontend:local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: always
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+
+volumes:
+  tockinax-prod-pgdata:
+  tockinax-prod-redisdata:

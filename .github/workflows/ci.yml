@@ -1,0 +1,191 @@
+name: ci
+
+# Continuous integration for TOCKINAX (npm workspaces: backend + frontend).
+#
+# Design notes (why this file looks the way it does):
+# - This is a WORKSPACE repo: one root package-lock.json. `npm ci` must run at
+#   the ROOT. Running it inside backend/ fails (no lockfile there).
+# - Dockerfiles copy package.json + package-lock.json from the repo ROOT, so the
+#   build context must be "." — not ./backend or ./frontend.
+# - Backend DB test suites are guarded by `process.env.DATABASE_URL ? describe : describe.skip`.
+#   The `unit` job deliberately runs without a DB (fast, hermetic). The
+#   `integration` job provides a real Postgres so those suites actually execute
+#   instead of silently skipping.
+# - Node version is pinned to 20 to match the production images (backend/Dockerfile,
+#   frontend/Dockerfile). NOTE: node:20 reaches EOL in 2026-04; bump images + this
+#   value together (see docs/CICD.md "Known debt").
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Fast hermetic gate: syntax + unit tests with no database.
+  # ---------------------------------------------------------------------------
+  unit:
+    name: unit (hermetic, no DB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Syntax check (backend src + db)
+        working-directory: backend
+        run: |
+          find src db \( -name "*.js" -o -name "*.cjs" \) -print0 | xargs -0 -r -n1 node --check
+
+      - name: Jest (DB suites auto-skip without DATABASE_URL)
+        working-directory: backend
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  # 2. Frontend production build (Next.js).
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Next build
+        working-directory: frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_API_URL: http://localhost:5070/api/v1
+          NEXT_PUBLIC_SITE_URL: http://localhost:3001
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # 3. Integration: real Postgres 16 -> migrate -> seed -> DB tests + smokes.
+  #    This is the job that actually proves the money paths behave.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: integration (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tockinax
+          POSTGRES_PASSWORD: tockinax
+          POSTGRES_DB: tockinax_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tockinax"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://tockinax:tockinax@localhost:5432/tockinax_test
+      # CI-only throwaway secrets. Never reuse these anywhere.
+      JWT_SECRET: ci-only-jwt-secret-0000000000000000000000000000
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-00000000000000000000000
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      APP_URL: http://localhost:3001
+      API_URL: http://localhost:5070/api/v1
+      PLATFORM_NAME: TOCKINAX
+      # Money gates MUST stay shut in CI.
+      LIVE_PAYMENTS_ENABLED: "false"
+      CRYPTO_PAYOUTS_ENABLED: "false"
+      CRYPTO_DEPOSITS_ENABLED: "false"
+      REWARDS_PAYOUTS_ENABLED: "false"
+      PAY2CRYPTO_SANDBOX: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Migrate (creates schema gatedp2p)
+        working-directory: backend
+        run: npm run db:migrate
+
+      - name: Seed (approved compensation plan; payouts stay gated)
+        working-directory: backend
+        run: npm run db:seed
+
+      - name: Jest (DB suites now ACTIVE)
+        working-directory: backend
+        run: npm test
+
+      - name: Token-loop smoke
+        working-directory: backend
+        run: node token-smoke.cjs
+
+      - name: Marketplace / payout-guard smoke
+        working-directory: backend
+        run: node live-smoke.cjs
+
+      - name: Frontend-contract coverage
+        working-directory: backend
+        run: node cover-check.cjs
+
+  # ---------------------------------------------------------------------------
+  # 4. Container images build (correct root context).
+  # ---------------------------------------------------------------------------
+  docker:
+    name: docker images
+    runs-on: ubuntu-latest
+    needs: [unit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          tags: tockinax-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: false
+          tags: tockinax-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

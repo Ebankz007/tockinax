@@ -1,0 +1,10 @@
+# Normalize text to LF in the repository; keep native endings in the working tree.
+* text=auto
+
+# Shell scripts MUST be LF or Linux dies with: /bin/bash^M: bad interpreter
+*.sh text eol=lf
+
+# Windows launchers keep CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
