@@ -27,12 +27,24 @@ Four jobs. A red job blocks the merge.
 
 ### `integration` — the job that matters (real Postgres 16)
 1. Starts a `postgres:16-alpine` service container.
-2. `npm run db:migrate` → creates schema `gatedp2p` and all tables.
-3. `npm run db:seed` → approved compensation plan, feature gates **off**.
-4. `npm test` → the DB suites now **execute** instead of skipping.
-5. `node token-smoke.cjs` → token purchase → maturity → auto-list → partial fills → oversell rejection.
-6. `node live-smoke.cjs` → register → list → order → evidence → dispute → ledger → payout guards.
-7. `node cover-check.cjs` → every URL the frontend calls exists on the backend.
+2. `npm run db:migrate` → schema `gatedp2p` + token tables.
+3. `npm run db:migrate:payments` → `deposit_intents`, `withdrawal_requests`, `withdrawal_events`.
+4. `npm run db:seed` → approved compensation plan, feature gates **off**.
+5. `npm test` → the DB suites now **execute** instead of skipping.
+6. `node token-smoke.cjs` → token purchase → maturity → auto-list → partial fills → oversell rejection.
+7. `node live-smoke.cjs` → register → list → order → evidence → dispute → ledger → payout guards.
+8. `node cover-check.cjs` → every URL the frontend calls exists on the backend.
+
+> **Both migrations must run, in order.** `deposit_intents` and the withdrawal
+> tables live in `migrate-payments.cjs`, a *separate* script that had no npm
+> script and was never run in CI. Without it every deposit path 500s.
+> `npm run db:migrate:all` runs both.
+
+> **This job is the only place the cold-start path is exercised.** The
+> `varchar(8)` widening, the table DDL and the seed are all first-run-only code
+> paths; on a developer machine the database has already been migrated, so a
+> broken cold path stays invisible. Three real defects were found this way
+> (lessons 249/250). Never remove this job, and never point it at a warm DB.
 
 All three smoke scripts are in-process (`supertest` + `buildApp()`), so no
 detached server is needed. Money gates are forced `false` via job env.
@@ -78,20 +90,20 @@ still builds locally when they are unset (backward compatible).
 
 ## 3. One-time setup (in order)
 
-### 3.1 Version control (required — currently missing)
-`C:\BerfamWorks\TOCKINAX` is **not a git repository**. Actions cannot run until
-it is one with a GitHub remote.
+### 3.1 Version control — DONE
+Repo: **`github.com/Ebankz007/tockinax`**, branch `main`, remote `origin`.
+`gh` is not authenticated on this machine, but Windows Credential Manager holds
+an `Ebankz007` credential for github.com, so `git push` works without a PAT.
 
-```powershell
-cd C:\BerfamWorks\TOCKINAX
-git init -b main
-git add .
-git commit -m "chore: initial import + CI/CD pipeline"
-gh repo create <owner>/tockinax --private --source=. --remote=origin --push
-```
+> **The repo is currently PUBLIC.** Source, docs and the compensation-plan
+> numbers are world-readable. Flip it in *Settings → General → Danger Zone →
+> Change visibility* (or `gh repo edit --visibility private`) if that was not
+> intended. Source disclosure is effectively irreversible once indexed.
 
-`.gitignore` already excludes `node_modules/`, `.next/`, `.env`, logs, dumps.
-Verify before the first commit: `git status --porcelain` must not list `.env`.
+`.gitattributes` pins `*.sh` to LF — a CRLF shell script fails on Linux with
+`bad interpreter: /bin/bash^M`. `.gitignore` excludes `node_modules/`, `.next/`,
+`.env`, logs, dumps. Verify before any commit: `git status --porcelain` must not
+list `.env`.
 
 ### 3.2 Branch protection (recommended)
 On `main`: require PR, require the `unit`, `frontend`, `integration`, `docker`
@@ -144,25 +156,80 @@ off instantly without a redeploy — prefer that first.
 ## 5. Local parity
 
 ```powershell
-npm ci                        # root, workspaces
-npm run test --workspace=backend        # hermetic
-npm run db:migrate; npm run db:seed     # against local dev DB
+npm ci                                   # root, workspaces
+npm run test --workspace=backend         # hermetic (DB suites skip)
+npm run db:migrate --workspace=backend   # schema gatedp2p + token tables
+npm run db:migrate:payments --workspace=backend   # deposit/withdrawal tables
+npm run db:seed --workspace=backend      # approved plan, payouts gated
 node backend/token-smoke.cjs
 node backend/live-smoke.cjs
 node backend/cover-check.cjs
 npm run build --workspace=frontend
 ```
 
+**To reproduce CI locally, use an empty database.** The cold-start path is where
+the real bugs live:
+
+```powershell
+# as a superuser
+psql -c "drop database if exists tockinax_ci_repro"
+psql -c "create database tockinax_ci_repro"
+$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5433/tockinax_ci_repro"
+npm run db:migrate:all --workspace=backend
+npm run db:seed --workspace=backend
+npm test --workspace=backend             # expect 70, not 63
+```
+
 ---
 
-## 6. Known debt / next steps
+## 6. Deploy target: aaPanel (NOT Docker)
+
+**The CD deploy job is written for Docker-over-SSH and does not match the
+production target. It must be rewritten before `DEPLOY_ENABLED` is set.**
+
+The live boxes (Aglotrends, COPINEX, AmplifiedTraders) are all the same shape:
+
+| Layer | Reality |
+|---|---|
+| Panel | **aaPanel** at `192.227.176.232:21874` (IP-whitelisted) |
+| Web | Nginx/Apache reverse proxy → `127.0.0.1:<port>` |
+| Process | **PM2** (`pm2 save` + `pm2-root` enabled so it survives reboot) |
+| DB | PostgreSQL 16, one database per site |
+| Deploy | a server-side cron (every 2 min) running `deploy.sh`, gated on CI status |
+
+The working pattern from those boxes:
+
+1. `deploy.sh` polls the GitHub API for the latest `main` CI conclusion.
+2. **Fail closed**: `RED` refuses, `UNKNOWN` proceeds, a timeout refuses.
+3. `git fetch && git reset --hard origin/main` into the checkout.
+4. `npm ci` → migrations → `npm run build` → `pm2 reload`.
+5. Log to `/var/log/tockinax-deploy.log`.
+
+Two hard-won constraints to carry over:
+
+- **The DocumentRoot must not be the checkout.** Serving the repo directly
+  published `schema.prisma`, `deploy.sh` and `.git/config` over HTTPS. The
+  reverse proxy is a *security control*, not a convenience — and the proof is a
+  list of paths that must 404, not a page load.
+- **TLS renewal belongs to aaPanel's own client** (`acme_v2.py`, HTTP-01 file
+  verification against the DocumentRoot). `/.well-known/acme-challenge/` must be
+  carved out of both the proxy and the http→https redirect, or renewal dies
+  silently at the 90-day mark.
+
+The `docker` CI job and `docker-compose.prod.yml` remain useful for local
+parity and for a future container host — they are simply not the deploy path.
+
+## 7. Known debt / next steps
 
 - **Node 20 is EOL (2026-04).** CI and both Dockerfiles pin `node:20-alpine`.
   Bump all three to `node:22-alpine` (LTS) together — one PR, verify in CI.
 - **No linter.** There is no ESLint/Prettier config. Add ESLint (flat config) +
   a `lint` job once the rule set is agreed; don't bolt it on mid-release.
+- **The CD deploy job targets the wrong platform** (see §6). Rewrite for
+  aaPanel/Nginx+PM2 before enabling. Until then `DEPLOY_ENABLED` stays unset and
+  the job is skipped.
 - **No staging environment.** CD goes straight to `production`. Add a
-  `staging` environment + second compose stack before the first real release.
+  `staging` environment + second stack before the first real release.
 - **No secret scanning / SAST.** Enable GitHub secret scanning + CodeQL in repo
   settings (free for private repos).
 - **Frontend image healthcheck** uses `grep -q .` (weak). Consider a `/` status
