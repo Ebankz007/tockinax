@@ -184,8 +184,29 @@ npm test --workspace=backend             # expect 70, not 63
 
 ## 6. Deploy target: aaPanel (NOT Docker)
 
-**The CD deploy job is written for Docker-over-SSH and does not match the
-production target. It must be rewritten before `DEPLOY_ENABLED` is set.**
+**Status: implemented and live (2026-10-23).** The GitHub Actions CD job is
+still the Docker/GHCR variant and remains inert (`DEPLOY_ENABLED` unset).
+Production deploys through `deploy/deploy.sh` on the server instead.
+
+### As built
+
+| Item | Value |
+|---|---|
+| App checkout | `/www/wwwroot/tockinax` (NOT the DocumentRoot) |
+| DocumentRoot | `/www/wwwroot/tockinax.com` (placeholder + ACME only) |
+| API | PM2 `tockinax-api` → `127.0.0.1:4002` |
+| Web | PM2 `tockinax-web` → `127.0.0.1:3201` |
+| Database | `tockinax_prod` / user `tockinax_prod`, schema `gatedp2p` |
+| Reverse proxy | Apache vhost `tockinax.com.conf` → `/api/` to 4002, `/` to 3201 |
+| Public API base | `https://tockinax.com/api/v1` (same-origin, no CORS) |
+| Deploy trigger | cron `*/2 * * * *` → `deploy/deploy.sh` |
+| Log | `/var/log/tockinax-deploy.log` |
+
+**Why the DocumentRoot is not the checkout:** every request except
+`/.well-known/acme-challenge/` is proxied, and the repo lives in a *different*
+directory, so no source file, `.env`, or `.git` object can ever be served from
+disk. Verified: `/.env`, `/.git/config`, `/package.json`, `/backend/db/seed.cjs`
+all return 404.
 
 The live boxes (Aglotrends, COPINEX, AmplifiedTraders) are all the same shape:
 
