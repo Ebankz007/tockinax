@@ -1,21 +1,28 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import Logo from '@/components/Logo';
 import './globals.css';
 
-const sans = Plus_Jakarta_Sans({
-  subsets: ['latin'],
+// Self-hosted variable fonts (SIL OFL 1.1 — see app/fonts/OFL.txt).
+// Self-hosting keeps the build deterministic and removes a third-party request
+// from every page load: a network fetch at build time is a build that can fail
+// for reasons unrelated to our code, and a fetch at runtime is a disclosure to
+// someone else's server.
+const sans = localFont({
+  src: './fonts/PlusJakartaSans-Variable.woff2',
   variable: '--font-body',
   display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
+  weight: '200 800',
+  fallback: ['system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
 });
 
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
+const mono = localFont({
+  src: './fonts/JetBrainsMono-Variable.woff2',
   variable: '--font-mono',
   display: 'swap',
-  weight: ['400', '500', '600'],
+  weight: '100 800',
+  fallback: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
 });
 
 export const metadata: Metadata = {
