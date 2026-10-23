@@ -43,6 +43,8 @@ BUILD_MEM="--max-old-space-size=2048"
 LOG="/var/log/tockinax-deploy.log"
 LOCK="/var/lock/tockinax-deploy.lock"
 FAILMARK="/var/lib/tockinax-deploy/failed-sha"
+# Which commit the .next on disk was built from - not the same as git HEAD.
+BUILT_MARK="/var/lib/tockinax-deploy/built-sha"
 # ---------------------------------------------------------------------------
 
 # From here on, every line of output - ours, npm's, and the shell's own error
@@ -131,8 +133,13 @@ git fetch --quiet origin "$BRANCH"
 LOCAL="$(git rev-parse HEAD)"
 REMOTE="$(git rev-parse "origin/$BRANCH")"
 
-# ---- nothing new -----------------------------------------------------------
-if [ "$LOCAL" = "$REMOTE" ]; then
+# ---- nothing to do ---------------------------------------------------------
+# "Nothing to do" means HEAD matches origin AND the build on disk was made from
+# HEAD. Those are two different facts: the tree can be at HEAD while .next still
+# holds an older build, which is exactly how a stale page survives a deploy.
+BUILT="$(cat "$BUILT_MARK" 2>/dev/null || echo none)"
+
+if [ "$LOCAL" = "$REMOTE" ] && [ "$BUILT" = "$LOCAL" ]; then
   if ! healthy; then
     log "no new commit but health check failed - restarting processes"
     pm2 restart "$API_NAME" || true
@@ -145,6 +152,12 @@ if [ "$LOCAL" = "$REMOTE" ]; then
   if ! curl -sf --max-time 15 "$WEB_HEALTH" | grep -q "$SHA_NOW"; then
     log "serving a build without marker ${SHA_NOW} - restarting ${WEB_NAME}"
     restart_one "$WEB_NAME" || true
+    if ! curl -sf --max-time 15 "$WEB_HEALTH" | grep -q "$SHA_NOW"; then
+      # One restart, then rebuild. Retrying the restart forever would flap the
+      # site every two minutes and never change the outcome.
+      log "still no marker after restart - clearing build marker to force a rebuild"
+      rm -f "$BUILT_MARK"
+    fi
   fi
   exit 0
 fi
@@ -198,6 +211,7 @@ rollback() {
   fi
   pm2 restart "$API_NAME" || true
   pm2 restart "$WEB_NAME" || true
+  echo "$PREV" > "$BUILT_MARK"
   log "rollback finished - site serving ${PREV}"
   exit 1
 }
@@ -253,4 +267,5 @@ log "served page carries build marker ${SHORT_SHA}"
 
 rm -rf frontend/.next.prev
 rm -f "$FAILMARK"
+echo "$REMOTE" > "$BUILT_MARK"
 log "deployed ${REMOTE} OK"
