@@ -2,17 +2,20 @@
 # TOCKINAX auto-deploy - runs ON THE LIVE SERVER (aaPanel 2-minute cron).
 #
 # Idempotent and fail-closed:
-#   - no new commit                -> health check only, no rebuild
-#   - CI for the new SHA not green -> do nothing, try again next tick
+#   - no new commit                 -> health check only, no rebuild
+#   - CI for the new SHA not green  -> do nothing, try again next tick
 #   - this exact SHA already failed -> do nothing until a NEW commit arrives
-#   - any step fails               -> abort, record the SHA, roll back, rebuild
-#   - health check fails           -> same rollback
+#   - any step fails                -> abort, record the SHA, restore, restart
+#   - health check fails            -> same
+#
+# Rollback restores the previous `.next` snapshot instead of rebuilding it. A
+# rebuild is the step most likely to fail, and a rollback that can itself fail
+# is not a rollback.
 #
 # Every step writes its full output to $LOG. A failure with no diagnostic is a
 # failure that cannot be fixed, so nothing is sent to /dev/null.
 #
 # Secrets live ONLY in $APP_DIR/.env on the server. Never in this file.
-# The repository is public, so the GitHub API read needs no credential.
 
 set -eu
 
@@ -49,6 +52,25 @@ run() {
 healthy() {
   curl -sf -o /dev/null --max-time 15 "$API_HEALTH" &&
   curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"
+}
+
+build_frontend() {
+  before="$(cat frontend/.next/BUILD_ID 2>/dev/null || echo none)"
+  if ! run "build frontend" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" \
+      NODE_OPTIONS="$BUILD_MEM" npm run build --workspace=frontend; then
+    return 1
+  fi
+  after="$(cat frontend/.next/BUILD_ID 2>/dev/null || echo none)"
+  if [ "$after" = "none" ]; then
+    log "   build reported success but produced no BUILD_ID - treating as failure"
+    return 1
+  fi
+  if [ "$after" = "$before" ]; then
+    log "   BUILD_ID did not change (${after}) - next build did not replace its output"
+    return 1
+  fi
+  log "   BUILD_ID ${before} -> ${after}"
+  return 0
 }
 
 mkdir -p "$(dirname "$FAILMARK")"
@@ -102,16 +124,41 @@ fi
 PREV="$LOCAL"
 log "deploying ${REMOTE} (was ${PREV})"
 
+restore_next() {
+  if [ -d frontend/.next.prev ]; then
+    rm -rf frontend/.next
+    mv frontend/.next.prev frontend/.next
+    log "restored previous .next snapshot"
+    return 0
+  fi
+  log "no .next snapshot available to restore"
+  return 1
+}
+
 rollback() {
   log "ROLLBACK to ${PREV}"
   echo "$REMOTE" > "$FAILMARK"
   git reset --hard "$PREV" >> "$LOG" 2>&1 || true
-  run "rollback: npm ci" npm ci || true
-  run "rollback: build" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" npm run build || true
+  if ! restore_next; then
+    log "rebuilding previous commit as a last resort"
+    npm ci >> "$LOG" 2>&1 || true
+    env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" \
+      npm run build --workspace=frontend >> "$LOG" 2>&1 || true
+  fi
   pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || true
   log "rollback finished - site serving ${PREV}"
   exit 1
 }
+
+# Snapshot the working build before touching anything.
+rm -rf frontend/.next.prev
+if [ -d frontend/.next ]; then
+  if cp -a frontend/.next frontend/.next.prev >> "$LOG" 2>&1; then
+    log "snapshot: saved current .next"
+  else
+    log "snapshot: FAILED to copy .next - rollback would have to rebuild"
+  fi
+fi
 
 LOCK_BEFORE="$(git show "${PREV}:package-lock.json" 2>/dev/null | sha256sum | cut -d' ' -f1)"
 
@@ -126,7 +173,7 @@ fi
 
 run "migrations" npm run db:migrate:all --workspace=backend || rollback
 
-run "build frontend" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" npm run build || rollback
+build_frontend || rollback
 
 log "reloading processes"
 pm2 reload "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || rollback
@@ -142,5 +189,6 @@ if ! curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"; then
   rollback
 fi
 
+rm -rf frontend/.next.prev
 rm -f "$FAILMARK"
 log "deployed ${REMOTE} OK"
