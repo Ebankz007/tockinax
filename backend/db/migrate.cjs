@@ -8,16 +8,10 @@ async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   console.log('[migrate] ensuring extensions + tables…');
   await pool.query(`CREATE SCHEMA IF NOT EXISTS gatedp2p;`);
-  // USDT support (2026-10-16): ISO codes are 3 chars but 'USDT' needs 4.
-  // Widen every currency/base/quote column to varchar(8), only if narrower.
-  await pool.query(`
-  do $$ declare r record; begin
-    for r in select table_name, column_name from information_schema.columns
-      where table_schema='gatedp2p' and column_name in ('currency','base','quote')
-      and data_type='character varying' and character_maximum_length < 8 loop
-      execute format('alter table %I alter column %I type varchar(8)', r.table_name, r.column_name);
-    end loop;
-  end $$;`);
+  // Schema gatedp2p is pinned. Set it per-connection: a pooled connection may
+  // differ from the one that ran SET search_path, and on a fresh CI database
+  // there is no role/database-level default to fall back on.
+  pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch(() => {}));
   await pool.query(`SET search_path TO gatedp2p, public;`);
   await pool.query(`create extension if not exists "pgcrypto";`);
   await pool.query(`create extension if not exists "citext";`);
@@ -114,6 +108,21 @@ async function main() {
   alter table users add column if not exists member_no varchar(16);
   `;
   await pool.query(tokenDdl);
+
+  // USDT support (2026-10-16): ISO codes are 3 chars but 'USDT' needs 4.
+  // Widen every currency/base/quote column to varchar(8), only if narrower.
+  // MUST run AFTER the DDL above: on a fresh database the tables do not exist
+  // yet, so running this first widened nothing and the seed then failed with
+  // "value too long for type character varying(3)".
+  await pool.query(`
+  do $$ declare r record; begin
+    for r in select table_name, column_name from information_schema.columns
+      where table_schema='gatedp2p' and column_name in ('currency','base','quote')
+      and data_type='character varying' and character_maximum_length < 8 loop
+      execute format('alter table %I alter column %I type varchar(8)', r.table_name, r.column_name);
+    end loop;
+  end $$;`);
+
   // Backfill member_no for pre-existing users (unique, TKX- + 8 hex upper); keep nulls from violating unique via filtered index below.
   await pool.query(`update users set member_no = 'TKX-' || upper(substr(md5(id::text), 1, 8)) where member_no is null`);
   await pool.query(`create unique index if not exists users_member_no_uidx on users (member_no)`);

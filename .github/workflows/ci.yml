@@ -134,9 +134,13 @@ jobs:
       - name: Install workspace deps
         run: npm ci
 
-      - name: Migrate (creates schema gatedp2p)
+      - name: Migrate (schema gatedp2p + token tables)
         working-directory: backend
         run: npm run db:migrate
+
+      - name: Migrate payments (deposit_intents, withdrawal_requests, withdrawal_events)
+        working-directory: backend
+        run: npm run db:migrate:payments
 
       - name: Seed (approved compensation plan; payouts stay gated)
         working-directory: backend

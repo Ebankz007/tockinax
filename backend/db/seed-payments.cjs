@@ -8,6 +8,9 @@ const { Pool } = require('pg');
 
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Schema gatedp2p is pinned. Set it per-connection so this works on a fresh DB
+// (CI) that has no role/database-level search_path default.
+pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch(() => {}));
   await pool.query(`SET search_path TO gatedp2p, public;`);
   const r = await pool.query(`select code, type, currency from ledger_accounts where code = 'LIAB:sim_usdt'`);
   if (!r.rowCount) {
