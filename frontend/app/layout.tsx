@@ -25,6 +25,11 @@ const mono = localFont({
   fallback: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
 });
 
+// Baked in at build time by deploy/deploy.sh. The deploy script greps the served
+// HTML for this string, so a stale process still answering 200 with an old build
+// is caught instead of being counted as a successful deployment.
+const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
+
 export const metadata: Metadata = {
   title: 'TOCKINAX — Trade. Connect. Grow Globally.',
   description:
@@ -62,6 +67,9 @@ const FOOTER_NAV: [string, string][] = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <head>
+        <meta name="x-tockinax-build" content={BUILD_SHA} />
+      </head>
       <body className="bg-ink text-bright antialiased font-sans">
         <a
           href="#main"

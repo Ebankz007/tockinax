@@ -7,13 +7,22 @@
 #   - this exact SHA already failed -> do nothing until a NEW commit arrives
 #   - any step fails                -> abort, record the SHA, restore, restart
 #   - health check fails            -> same
+#   - restarted process is not new  -> same
+#   - served page is not this build -> same
+#
+# Two lessons are baked in here:
+#   * A restart that is not verified is not a restart. `pm2 reload a b` silently
+#     skipped one app; the process kept serving a stale build while every check
+#     passed. So each app is restarted individually and its PID is compared.
+#   * A 200 is not a deployment. The page must contain the SHA we just built,
+#     otherwise the old build is still being served.
 #
 # Rollback restores the previous `.next` snapshot instead of rebuilding it. A
 # rebuild is the step most likely to fail, and a rollback that can itself fail
 # is not a rollback.
 #
-# Every step writes its full output to $LOG. A failure with no diagnostic is a
-# failure that cannot be fixed, so nothing is sent to /dev/null.
+# Everything is appended to $LOG, including shell aborts before the first step:
+# a failure with no diagnostic is a failure that cannot be fixed.
 #
 # Secrets live ONLY in $APP_DIR/.env on the server. Never in this file.
 
@@ -36,12 +45,18 @@ LOCK="/var/lock/tockinax-deploy.lock"
 FAILMARK="/var/lib/tockinax-deploy/failed-sha"
 # ---------------------------------------------------------------------------
 
-log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*" >> "$LOG"; }
+# From here on, every line of output - ours, npm's, and the shell's own error
+# messages - lands in the log.
+exec >> "$LOG" 2>&1
+
+log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"; }
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then log "script exited rc=$rc"; fi' EXIT
 
 run() {
   desc="$1"; shift
   log "-> $desc"
-  if "$@" >> "$LOG" 2>&1; then
+  if "$@"; then
     log "   ok: $desc"
     return 0
   fi
@@ -54,10 +69,38 @@ healthy() {
   curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"
 }
 
+pm2_pid() { pm2 pid "$1" 2>/dev/null | tr -d '[:space:]'; }
+
+# Restart one app and prove it actually came back as a NEW process.
+restart_one() {
+  name="$1"
+  before="$(pm2_pid "$name")"
+  if ! pm2 restart "$name"; then
+    log "   pm2 restart $name failed"
+    return 1
+  fi
+  i=0
+  while [ "$i" -lt 25 ]; do
+    after="$(pm2_pid "$name")"
+    if [ -n "$after" ] && [ "$after" != "0" ] && [ "$after" != "$before" ]; then
+      log "   $name restarted (pid ${before:-?} -> $after)"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  log "   $name did NOT restart (pid still ${before:-?}) - treating as failure"
+  return 1
+}
+
 build_frontend() {
+  sha="$(git rev-parse --short HEAD)"
   before="$(cat frontend/.next/BUILD_ID 2>/dev/null || echo none)"
-  if ! run "build frontend" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" \
-      NODE_OPTIONS="$BUILD_MEM" npm run build --workspace=frontend; then
+  if ! run "build frontend (${sha})" env \
+      NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" \
+      NEXT_PUBLIC_BUILD_SHA="$sha" \
+      NODE_OPTIONS="$BUILD_MEM" \
+      npm run build --workspace=frontend; then
     return 1
   fi
   after="$(cat frontend/.next/BUILD_ID 2>/dev/null || echo none)"
@@ -94,7 +137,8 @@ if [ "$LOCAL" = "$REMOTE" ]; then
     exit 0
   fi
   log "no new commit but health check failed - restarting processes"
-  pm2 restart "$API_NAME" "$WEB_NAME" >/dev/null 2>&1 || true
+  pm2 restart "$API_NAME" || true
+  pm2 restart "$WEB_NAME" || true
   exit 0
 fi
 
@@ -138,14 +182,15 @@ restore_next() {
 rollback() {
   log "ROLLBACK to ${PREV}"
   echo "$REMOTE" > "$FAILMARK"
-  git reset --hard "$PREV" >> "$LOG" 2>&1 || true
+  git reset --hard "$PREV" || true
   if ! restore_next; then
     log "rebuilding previous commit as a last resort"
-    npm ci >> "$LOG" 2>&1 || true
+    npm ci || true
     env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" \
-      npm run build --workspace=frontend >> "$LOG" 2>&1 || true
+      npm run build --workspace=frontend || true
   fi
-  pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || true
+  pm2 restart "$API_NAME" || true
+  pm2 restart "$WEB_NAME" || true
   log "rollback finished - site serving ${PREV}"
   exit 1
 }
@@ -153,7 +198,7 @@ rollback() {
 # Snapshot the working build before touching anything.
 rm -rf frontend/.next.prev
 if [ -d frontend/.next ]; then
-  if cp -a frontend/.next frontend/.next.prev >> "$LOG" 2>&1; then
+  if cp -a frontend/.next frontend/.next.prev; then
     log "snapshot: saved current .next"
   else
     log "snapshot: FAILED to copy .next - rollback would have to rebuild"
@@ -162,7 +207,7 @@ fi
 
 LOCK_BEFORE="$(git show "${PREV}:package-lock.json" 2>/dev/null | sha256sum | cut -d' ' -f1)"
 
-git reset --hard "$REMOTE" >> "$LOG" 2>&1 || rollback
+git reset --hard "$REMOTE" || rollback
 
 LOCK_AFTER="$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)"
 if [ "$LOCK_BEFORE" != "$LOCK_AFTER" ]; then
@@ -175,10 +220,13 @@ run "migrations" npm run db:migrate:all --workspace=backend || rollback
 
 build_frontend || rollback
 
-log "reloading processes"
-pm2 reload "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || rollback
+SHORT_SHA="$(git rev-parse --short HEAD)"
 
-sleep 6
+log "restarting processes"
+restart_one "$API_NAME" || rollback
+restart_one "$WEB_NAME" || rollback
+
+sleep 4
 
 if ! curl -sf -o /dev/null --max-time 15 "$API_HEALTH"; then
   log "api health check FAILED"
@@ -188,6 +236,13 @@ if ! curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"; then
   log "web health check FAILED"
   rollback
 fi
+
+# A 200 is not a deployment: prove the served page is the build we just made.
+if ! curl -sf --max-time 15 "$WEB_HEALTH" | grep -q "$SHORT_SHA"; then
+  log "served page does not contain build marker ${SHORT_SHA} - stale build"
+  rollback
+fi
+log "served page carries build marker ${SHORT_SHA}"
 
 rm -rf frontend/.next.prev
 rm -f "$FAILMARK"
