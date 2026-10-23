@@ -21,21 +21,21 @@
     "admin:create": "node src/scripts/admin-create.cjs"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "decimal.js": "^10.4.3",
-    "dotenv": "^16.4.5",
-    "drizzle-orm": "^0.33.0",
-    "express": "^4.19.2",
-    "express-rate-limit": "^7.2.0",
-    "helmet": "^7.1.0",
+    "dotenv": "^18.0.8",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "nodemailer": "^6.9.14",
+    "nodemailer": "^10.1.7",
     "pg": "^8.12.0",
     "speakeasy": "^2.0.0",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "drizzle-kit": "^0.24.2",
