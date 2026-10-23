@@ -15,7 +15,7 @@
     "docker:down": "docker compose down"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "concurrently": "^10.0.6"
   },
   "engines": { "node": ">=20" }
 }
