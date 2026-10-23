@@ -8,6 +8,9 @@ async function main() {
   const email = (process.env.ADMIN_EMAIL || '').toLowerCase();
   if (!email || !email.includes('@')) { console.error('Set ADMIN_EMAIL=... first'); process.exit(1); }
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Schema gatedp2p is pinned. Set it per-connection so this works on a fresh DB
+// (CI) that has no role/database-level search_path default.
+pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch(() => {}));
   const token = crypto.randomBytes(32).toString('hex');
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   await pool.query(`insert into system_settings (key, value) values ('admin_bootstrap:'||$1, $2)

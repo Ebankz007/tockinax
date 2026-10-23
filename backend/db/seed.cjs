@@ -7,6 +7,9 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { Pool } = require('pg');
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Schema gatedp2p is pinned. Set it per-connection so this works on a fresh DB
+// (CI) that has no role/database-level search_path default.
+pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch(() => {}));
   const upsert = async (t, rows) => { for (const r of rows) await pool.query(t, r); };
 
   await pool.query(`insert into roles (name, description) values

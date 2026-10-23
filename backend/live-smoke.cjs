@@ -8,6 +8,9 @@ const { Pool } = require('pg');
 const { buildApp } = require('./src/app');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Schema gatedp2p is pinned. Set it per-connection so this works on a fresh DB
+// (CI) that has no role/database-level search_path default.
+pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch(() => {}));
 const app = buildApp();
 const S = (t) => console.log(t);
 let pass = 0, fail = 0;
