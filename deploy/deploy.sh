@@ -2,20 +2,17 @@
 # TOCKINAX auto-deploy - runs ON THE LIVE SERVER (aaPanel 2-minute cron).
 #
 # Idempotent and fail-closed:
-#   - no new commit              -> health check only, no rebuild
+#   - no new commit                -> health check only, no rebuild
 #   - CI for the new SHA not green -> do nothing, try again next tick
-#   - any step fails             -> abort before the next step
-#   - health check fails         -> roll back to the previous commit and rebuild
+#   - this exact SHA already failed -> do nothing until a NEW commit arrives
+#   - any step fails               -> abort, record the SHA, roll back, rebuild
+#   - health check fails           -> same rollback
+#
+# Every step writes its full output to $LOG. A failure with no diagnostic is a
+# failure that cannot be fixed, so nothing is sent to /dev/null.
 #
 # Secrets live ONLY in $APP_DIR/.env on the server. Never in this file.
 # The repository is public, so the GitHub API read needs no credential.
-#
-# Design notes:
-#   - Deploys origin/main HEAD whatever branch was pushed, so a feature-branch
-#     push triggers a harmless no-op rather than a wrong deploy.
-#   - Migrations are additive-only and run before the build.
-#   - The database is NOT rolled back (migrations are forward-only by design).
-#   - The frontend build bakes NEXT_PUBLIC_API_URL, so it MUST be exported here.
 
 set -eu
 
@@ -30,16 +27,36 @@ WEB_NAME="tockinax-web"
 API_HEALTH="http://127.0.0.1:${API_PORT}/healthz"
 WEB_HEALTH="http://127.0.0.1:${WEB_PORT}/"
 PUBLIC_API_URL="https://tockinax.com/api/v1"
+BUILD_MEM="--max-old-space-size=2048"
 LOG="/var/log/tockinax-deploy.log"
 LOCK="/var/lock/tockinax-deploy.lock"
+FAILMARK="/var/lib/tockinax-deploy/failed-sha"
 # ---------------------------------------------------------------------------
 
 log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*" >> "$LOG"; }
 
-# One deploy at a time. A 2-minute tick must never overlap a slow build.
+run() {
+  desc="$1"; shift
+  log "-> $desc"
+  if "$@" >> "$LOG" 2>&1; then
+    log "   ok: $desc"
+    return 0
+  fi
+  log "   FAILED: $desc (see lines above)"
+  return 1
+}
+
+healthy() {
+  curl -sf -o /dev/null --max-time 15 "$API_HEALTH" &&
+  curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"
+}
+
+mkdir -p "$(dirname "$FAILMARK")"
+
+# One deploy at a time - a 2-minute tick must never overlap a slow build.
 exec 9>"$LOCK"
 if ! flock -n 9; then
-  echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] previous deploy still running - skipping" >> "$LOG"
+  log "previous deploy still running - skipping"
   exit 0
 fi
 
@@ -49,17 +66,22 @@ git fetch --quiet origin "$BRANCH"
 LOCAL="$(git rev-parse HEAD)"
 REMOTE="$(git rev-parse "origin/$BRANCH")"
 
+# ---- nothing new -----------------------------------------------------------
 if [ "$LOCAL" = "$REMOTE" ]; then
-  # Nothing new. Still prove the app is alive; restart if it is not.
-  if curl -sf -o /dev/null --max-time 10 "$API_HEALTH" && curl -sf -o /dev/null --max-time 10 "$WEB_HEALTH"; then
+  if healthy; then
     exit 0
   fi
-  log "no new commit, but health check failed - restarting"
+  log "no new commit but health check failed - restarting processes"
   pm2 restart "$API_NAME" "$WEB_NAME" >/dev/null 2>&1 || true
   exit 0
 fi
 
-# ---- CI gate: only ship a commit whose pipeline is green -------------------
+# ---- do not retry a commit that already failed -----------------------------
+if [ -f "$FAILMARK" ] && [ "$(cat "$FAILMARK")" = "$REMOTE" ]; then
+  exit 0
+fi
+
+# ---- CI gate ---------------------------------------------------------------
 STATUS_JSON="$(curl -sf --max-time 20 \
   "https://api.github.com/repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${REMOTE}&per_page=1" \
   || echo '')"
@@ -72,40 +94,44 @@ fi
 CONCLUSION="$(printf '%s' "$STATUS_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);r=d.get("workflow_runs") or [];print(r[0]["conclusion"] if r else "none")' 2>/dev/null || echo none)"
 
 if [ "$CONCLUSION" != "success" ]; then
-  log "CI for ${REMOTE} is '${CONCLUSION}' - not deploying"
+  log "CI for ${REMOTE} is '${CONCLUSION}' - not deploying yet"
   exit 0
 fi
 
-log "deploying ${REMOTE} (was ${LOCAL})"
-
-# ---- deploy ---------------------------------------------------------------
+# ---- deploy ----------------------------------------------------------------
 PREV="$LOCAL"
+log "deploying ${REMOTE} (was ${PREV})"
 
 rollback() {
   log "ROLLBACK to ${PREV}"
-  git reset --hard "$PREV" >/dev/null 2>&1 || true
-  npm ci >/dev/null 2>&1 || true
-  NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" npm run build >/dev/null 2>&1 || true
-  pm2 restart "$API_NAME" "$WEB_NAME" >/dev/null 2>&1 || true
-  log "rollback finished"
+  echo "$REMOTE" > "$FAILMARK"
+  git reset --hard "$PREV" >> "$LOG" 2>&1 || true
+  run "rollback: npm ci" npm ci || true
+  run "rollback: build" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" npm run build || true
+  pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || true
+  log "rollback finished - site serving ${PREV}"
   exit 1
 }
 
-git reset --hard "$REMOTE" || rollback
+LOCK_BEFORE="$(git show "${PREV}:package-lock.json" 2>/dev/null | sha256sum | cut -d' ' -f1)"
 
-log "installing dependencies"
-npm ci || rollback
+git reset --hard "$REMOTE" >> "$LOG" 2>&1 || rollback
 
-log "running migrations"
-npm run db:migrate:all --workspace=backend || rollback
+LOCK_AFTER="$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)"
+if [ "$LOCK_BEFORE" != "$LOCK_AFTER" ]; then
+  run "npm ci (lockfile changed)" npm ci || rollback
+else
+  log "dependencies unchanged - skipping npm ci"
+fi
 
-log "building frontend"
-NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" npm run build || rollback
+run "migrations" npm run db:migrate:all --workspace=backend || rollback
+
+run "build frontend" env NEXT_PUBLIC_API_URL="$PUBLIC_API_URL" NODE_OPTIONS="$BUILD_MEM" npm run build || rollback
 
 log "reloading processes"
-pm2 reload "$API_NAME" "$WEB_NAME" >/dev/null 2>&1 || pm2 restart "$API_NAME" "$WEB_NAME" || rollback
+pm2 reload "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || pm2 restart "$API_NAME" "$WEB_NAME" >> "$LOG" 2>&1 || rollback
 
-sleep 5
+sleep 6
 
 if ! curl -sf -o /dev/null --max-time 15 "$API_HEALTH"; then
   log "api health check FAILED"
@@ -116,4 +142,5 @@ if ! curl -sf -o /dev/null --max-time 15 "$WEB_HEALTH"; then
   rollback
 fi
 
+rm -f "$FAILMARK"
 log "deployed ${REMOTE} OK"
