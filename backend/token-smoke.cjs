@@ -39,7 +39,7 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
 
   // member_no + compat definitions/categories
   let r = await request(app).get('/api/v1/tokens/definitions').set('Authorization', 'Bearer ' + buyer.token);
-  ok('definitions list TKX-SIM', r.status === 200 && r.body.items.some(x => x.code === 'TKX-SIM'), `-> ${r.status}`);
+  ok('definitions list TKX', r.status === 200 && r.body.items.some(x => x.code === 'TKX'), `-> ${r.status}`);
   r = await request(app).get('/api/v1/tokens/categories').set('Authorization', 'Bearer ' + buyer.token);
   ok('8 categories all disabled', r.status === 200 && r.body.items.length === 8 && r.body.items.every(x => x.active === false), `n=${r.body.items.length}`);
   r = await request(app).get('/api/v1/tokens/pricing-versions').set('Authorization', 'Bearer ' + buyer.token);
