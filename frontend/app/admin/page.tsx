@@ -1,4 +1,5 @@
 'use client';
+
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
@@ -97,7 +98,14 @@ function AdminInner() {
         <Link href="/admin/insurance" className="btn-secondary">Insurance</Link>
         <Link href="/admin/content" className="btn-secondary">Content</Link>
         <Link href="/admin/users" className="btn-secondary">Users</Link>
-        <Link href="/admin/roles" className="btn-secondary">Roles &amp; permissions</Link>
+        <Link href="/admin/roles" className="btn-secondary">Roles & permissions</Link>
+        <button
+          onClick={() => void window.location.href = '/api/v1/auth/logout'}
+          className="btn-danger w-full mt-2 text-sm"
+          aria-label="Logout"
+        >
+          Logout
+        </button>
       </nav>
     </div>
   );
