@@ -25,7 +25,7 @@ function RegisterForm() {
         email,
         password,
         displayName: displayName || undefined,
-        referralCode: referralCode ? referralCode.toUpperCase() : undefined,
+        referralCode: referralCode.toUpperCase(),
         acceptTerms: true,
       });
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
@@ -56,8 +56,8 @@ function RegisterForm() {
         <input id="reg-pass" className="input" type="password" required minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       <div>
-        <label className="label" htmlFor="reg-ref">Referral code (optional)</label>
-        <input id="reg-ref" className="input" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} maxLength={16} placeholder="ABC12345" />
+        <label className="label" htmlFor="reg-ref">Referral code (required)</label>
+        <input id="reg-ref" className="input" required value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} maxLength={16} placeholder="ABC12345" />
       </div>
       <div className="flex items-start gap-2 text-sm">
         <input id="reg-terms" type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} required className="mt-1" />

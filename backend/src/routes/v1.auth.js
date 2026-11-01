@@ -13,7 +13,7 @@ const regSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(10).max(128),
   displayName: z.string().min(2).max(120).optional(),
-  referralCode: z.string().max(16).optional(),
+  referralCode: z.string().min(1).max(16),
   acceptTerms: z.literal(true),
 });
 
