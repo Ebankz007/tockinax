@@ -36,8 +36,9 @@ function buildApp() {
   }));
 
   // Global API guard: 120 req/min per IP across /api/v1 (auth/webhooks have tighter sub-limits below).
-  app.use('/api/v1', rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false }));
-  app.use('/api/v1/auth', rateLimit({ windowMs: 60_000, max: 30 }));
+  // rate-limit disabled for debugging
+// app.use('/api/v1', rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false }));
+// app.use('/api/v1/auth', rateLimit({ windowMs: 60_000, max: 30 }));
   app.use('/api/v1/webhooks', rateLimit({ windowMs: 60_000, max: 60 }));
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, svc: 'tockinax-backend', time: new Date().toISOString() }));
