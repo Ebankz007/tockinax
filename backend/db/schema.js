@@ -60,6 +60,11 @@ const permissions = pgTable('permissions', {
   key: varchar('key', { length: 128 }).notNull().unique(),
   description: text('description'),
 });
+const rolePermissions = pgTable('role_permissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
+}, (t) => [uniqueIndex('role_permissions_role_perm_uidx').on(t.roleId, t.permissionId)]);
 const userRoles = pgTable('user_roles', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
@@ -558,7 +563,7 @@ const insuranceClaims = pgTable('insurance_claims', {
 }, (t) => [index('insurance_claims_user_idx').on(t.userId), index('insurance_claims_status_idx').on(t.status)]);
 
 module.exports = {
-  users, userProfiles, roles, permissions, userRoles, userSessions,
+  users, userProfiles, roles, permissions, rolePermissions, userRoles, userSessions,
   identityChecks, consentRecords, serviceFees, servicePayments,
   listings, listingImages, orders, orderItems, paymentEvidence, paymentProviderEvents,
   disputes, supportTickets, supportMessages,

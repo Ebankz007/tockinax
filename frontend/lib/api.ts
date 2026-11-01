@@ -34,6 +34,8 @@ export const api = {
     req<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>
     req<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) }),
+  delete: <T>(path: string) =>
+    req<T>(path, { method: 'DELETE' }),
 };
 
 /* ---------- Types ---------- */
@@ -232,6 +234,53 @@ export type CategoryRow = {
   rate_bps?: number | null;
   enabled?: boolean;
   status?: string;
+};
+
+/* ---------- Admin user & role management ---------- */
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  status: string;
+  member_no?: string | null;
+  mfa_enabled: boolean;
+  created_at?: string;
+  display_name?: string | null;
+  roles: string[];
+};
+
+export type AdminRole = {
+  id: string;
+  name: string;
+  description?: string | null;
+  permission_count: number;
+};
+
+export type AdminPermission = {
+  id: string;
+  key: string;
+  description?: string | null;
+};
+
+/* ---------- 2FA ---------- */
+
+export type TwoFaSetup = {
+  secret: string;
+  qrUri: string;
+};
+
+export type TwoFaValidate = {
+  mfa_required: boolean;
+  userId: string;
+  email: string;
+  challenge: string;
+  next: string;
+};
+
+export type TwoFaLoginResult = {
+  access: string;
+  refresh: string;
+  mfa_validated: boolean;
 };
 
 /* ---------- Insurance ---------- */

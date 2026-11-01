@@ -17,11 +17,41 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('support','Tickets + disputes'),('member','Default member'),('seller','Can list (flag-gated)')
     on conflict (name) do nothing`);
   await pool.query(`insert into permissions (key, description) values
-    ('listings.moderate','Approve/reject listings'),('orders.review','Review evidence + confirm'),
-    ('payouts.review','Approve/reject payouts'),('campaigns.manage','Create/approve campaigns'),
-    ('commissions.configure','Version commission rules'),('content.manage','Edit CMS pages'),
-    ('users.manage','Suspend/reactivate'),('settings.manage','Change platform settings')
+    ('users.manage','Create, suspend, reactivate users'),
+    ('users.create','Create new user accounts'),
+    ('roles.manage','Create/assign roles and permissions'),
+    ('permissions.manage','Manage permission definitions'),
+    ('listings.moderate','Approve/reject listings'),
+    ('orders.review','Review evidence + confirm orders'),
+    ('payouts.review','Approve/reject payouts'),
+    ('campaigns.manage','Create/approve campaigns'),
+    ('commissions.configure','Version commission rules'),
+    ('content.manage','Edit CMS pages'),
+    ('settings.manage','Change platform settings'),
+    ('insurance.manage','Manage insurance policies and claims'),
+    ('token.manage','Manage token definitions and pricing')
     on conflict (key) do nothing`);
+
+  // Grant all permissions to super_admin; scoped permissions to other roles
+  await pool.query(`
+    insert into role_permissions (role_id, permission_id)
+    select r.id, p.id from roles r, permissions p where r.name='super_admin'
+    on conflict (role_id, permission_id) do nothing`);
+  await pool.query(`
+    insert into role_permissions (role_id, permission_id)
+    select r.id, p.id from roles r, permissions p
+    where r.name='finance' and p.key in ('payouts.review','orders.review','content.manage','insurance.manage')
+    on conflict (role_id, permission_id) do nothing`);
+  await pool.query(`
+    insert into role_permissions (role_id, permission_id)
+    select r.id, p.id from roles r, permissions p
+    where r.name='support' and p.key in ('listings.moderate','orders.review','content.manage')
+    on conflict (role_id, permission_id) do nothing`);
+  await pool.query(`
+    insert into role_permissions (role_id, permission_id)
+    select r.id, p.id from roles r, permissions p
+    where r.name='seller' and p.key in ('listings.moderate')
+    on conflict (role_id, permission_id) do nothing`);
 
   await pool.query(`insert into service_fees (key, amount, currency, description, refund_policy) values
     ('registration', 0, 'USD', 'Community membership — covers onboarding + verification. Not an investment.', 'Refundable within 7 days if account never activated.')

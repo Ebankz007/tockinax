@@ -97,6 +97,7 @@ function AdminInner() {
         <Link href="/admin/insurance" className="btn-secondary">Insurance</Link>
         <Link href="/admin/content" className="btn-secondary">Content</Link>
         <Link href="/admin/users" className="btn-secondary">Users</Link>
+        <Link href="/admin/roles" className="btn-secondary">Roles &amp; permissions</Link>
       </nav>
     </div>
   );

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { z } = require('zod');
 const { getPool } = require('../lib/db');
 const { signAccess, signRefresh, authRequired } = require('../middleware/auth');
+const speakeasy = require('speakeasy');
 
 const router = express.Router();
 const TERMS_VERSION = '2026.10-v1';
@@ -129,6 +130,21 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'invalid_credentials' });
     }
     await pool.query(`update users set failed_logins=0 where id=$1`, [u.id]);
+    // If 2FA is enabled, do not issue tokens yet — require TOTP validation first.
+    if (u.mfa_enabled) {
+      const challenge = crypto.randomBytes(16).toString('hex');
+      await pool.query(
+        `insert into user_sessions (user_id, refresh_hash, ip, user_agent, expires_at)
+         values ($1,$2,$3,$4, now()+interval '10 minutes')`,
+        [u.id, `2fa:${challenge}`, req.ip, req.headers['user-agent']]);
+      return res.status(200).json({
+        mfa_required: true,
+        userId: u.id,
+        email: u.email,
+        challenge,
+        next: 'verify_2fa',
+      });
+    }
     const sid = crypto.randomUUID();
     const refresh = signRefresh(u, sid);
     const rHash = crypto.createHash('sha256').update(refresh).digest('hex');
@@ -140,8 +156,111 @@ router.post('/login', async (req, res, next) => {
 
 router.get('/me', authRequired, async (req, res) => {
   const pool = getPool();
-  const r = await pool.query(`select u.id, u.email, u.status, u.referral_code, p.display_name from users u left join user_profiles p on p.user_id=u.id where u.id=$1`, [req.user.id]);
+  const r = await pool.query(`select u.id, u.email, u.status, u.referral_code, p.display_name, u.mfa_enabled from users u left join user_profiles p on p.user_id=u.id where u.id=$1`, [req.user.id]);
   res.json(r.rows[0]);
+});
+
+// ---- 2FA (TOTP) ----
+
+// POST /auth/2fa/setup — generate secret + QR URI (requires auth)
+router.post('/2fa/setup', authRequired, async (req, res, next) => {
+  try {
+    const pool = getPool();
+    const secret = speakeasy.generateSecret({ length: 32, name: `TOCKINAX (${req.user.email})` });
+    // Store secret unconfirmed until user verifies with a valid code
+    await pool.query(`update users set mfa_secret=$1 where id=$2`, [secret.base32, req.user.id]);
+    const otpauth = speakeasy.otpauthURL({
+      secret: secret.base32,
+      label: req.user.email,
+      issuer: 'TOCKINAX',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+    });
+    res.json({ secret: secret.base32, qrUri: otpauth });
+  } catch (e) { next(e); }
+});
+
+// POST /auth/2fa/verify — verify TOTP code and enable mfa (requires auth + setup)
+router.post('/2fa/verify', authRequired, async (req, res, next) => {
+  try {
+    const { token } = z.object({ token: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const pool = getPool();
+    const u = await pool.query(`select mfa_secret from users where id=$1`, [req.user.id]);
+    if (!u.rowCount || !u.rows[0].mfa_secret) return res.status(400).json({ error: 'no_setup' });
+    const verified = speakeasy.totp.verify({
+      secret: u.rows[0].mfa_secret,
+      encoding: 'base32',
+      token,
+    });
+    if (!verified) return res.status(400).json({ error: 'invalid_code' });
+    await pool.query(`update users set mfa_enabled=true where id=$1`, [req.user.id]);
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.enable','user',$2,{},$3)`,
+      [req.user.id, req.user.id, req.ip]);
+    res.json({ ok: true, mfa_enabled: true });
+  } catch (e) { next(e); }
+});
+
+// POST /auth/2fa/disable — disable mfa (requires auth + valid current code)
+router.post('/2fa/disable', authRequired, async (req, res, next) => {
+  try {
+    const { token } = z.object({ token: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const pool = getPool();
+    const u = await pool.query(`select mfa_secret, mfa_enabled from users where id=$1`, [req.user.id]);
+    if (!u.rowCount || !u.rows[0].mfa_enabled) return res.status(400).json({ error: 'mfa_not_enabled' });
+    const verified = speakeasy.totp.verify({
+      secret: u.rows[0].mfa_secret,
+      encoding: 'base32',
+      token,
+    });
+    if (!verified) return res.status(400).json({ error: 'invalid_code' });
+    await pool.query(`update users set mfa_enabled=false, mfa_secret=null where id=$1`, [req.user.id]);
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.disable','user',$2,{},$3)`,
+      [req.user.id, req.user.id, req.ip]);
+    res.json({ ok: true, mfa_enabled: false });
+  } catch (e) { next(e); }
+});
+
+// POST /auth/2fa/validate — validate TOTP during login flow, issue tokens
+router.post('/2fa/validate', async (req, res, next) => {
+  try {
+    const { userId, token, challenge } = z.object({
+      userId: z.string().uuid(),
+      token: z.string().regex(/^\d{6}$/),
+      challenge: z.string().min(16),
+    }).parse(req.body);
+
+    const pool = getPool();
+    // Find the 2FA session created during login
+    const s = await pool.query(`select id, user_id, refresh_hash, expires_at from user_sessions
+      where user_id=$1 and refresh_hash like '2fa:%' and expires_at > now() order by created_at desc limit 1`, [userId]);
+    if (!s.rowCount) return res.status(401).json({ error: 'challenge_expired' });
+    const session = s.rows[0];
+    const storedChallenge = session.refresh_hash.replace(/^2fa:/, '');
+
+    if (storedChallenge !== challenge) return res.status(401).json({ error: 'invalid_challenge' });
+
+    const u = await pool.query(`select mfa_secret from users where id=$1`, [userId]);
+    if (!u.rowCount || !u.rows[0].mfa_secret) return res.status(400).json({ error: 'no_mfa' });
+
+    const verified = speakeasy.totp.verify({
+      secret: u.rows[0].mfa_secret,
+      encoding: 'base32',
+      token,
+    });
+    if (!verified) return res.status(400).json({ error: 'invalid_code' });
+
+    // Issue real tokens, clean up the 2FA session
+    const userRow = await pool.query(`select id, email from users where id=$1`, [userId]);
+    const user = userRow.rows[0];
+    await pool.query(`delete from user_sessions where id=$1`, [session.id]);
+    const sid = crypto.randomUUID();
+    const refresh = signRefresh(user, sid);
+    const rHash = crypto.createHash('sha256').update(refresh).digest('hex');
+    await pool.query(`insert into user_sessions (user_id, refresh_hash, ip, user_agent, expires_at) values ($1,$2,$3,$4, now()+interval '7 days')`, [user.id, rHash, req.ip, req.headers['user-agent']]);
+    res.cookie('tockinax_at', signAccess(user), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000 });
+    res.json({ access: signAccess(user), refresh, mfa_validated: true });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

@@ -53,6 +53,7 @@ function buildApp() {
   app.use('/api/v1/referrals', require('./routes/v1.referrals'));
   app.use('/api/v1/rewards', require('./routes/v1.rewards'));
   app.use('/api/v1/payouts', require('./routes/v1.payouts'));
+  app.use('/api/v1/admin/users', require('./routes/v1.admin-users'));
   app.use('/api/v1/admin', require('./routes/v1.admin'));
   app.use('/api/v1/disputes', require('./routes/v1.disputes'));
   app.use('/api/v1/support', require('./routes/v1.support'));
