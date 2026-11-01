@@ -58,16 +58,22 @@ router.post('/purchase', async (req, res, next) => {
       token_code: z.string().min(1),
       holding_id: z.string().uuid().optional(),
       coverage_amount: z.string().regex(/^\d+(\.\d{1,4})?$/),
-      premium_paid: z.string().regex(/^\d+(\.\d{1,4})?$/),
+      premium_paid: z.string().regex(/^\d+(\.\d{1,4})?$/).optional(),
       expires_at: z.string().datetime().optional(),
       terms: z.string().max(2000).optional().default(''),
     }).parse(req.body);
 
     const pool = getPool();
     const coverage = new Decimal(b.coverage_amount);
-    const premium = new Decimal(b.premium_paid);
     if (coverage.lte(0)) return res.status(400).json({ error: 'invalid_coverage' });
-    if (premium.lte(0)) return res.status(400).json({ error: 'invalid_premium' });
+
+    // Calculate premium: 10% of coverage amount (company profit ahead)
+    const premium = coverage.div(new Decimal('10')).round(4, Decimal.ROUND_DOWN);
+    const netCoverage = coverage.sub(premium);
+
+    // If premium_paid was explicitly provided (for top-ups), use that; otherwise calculate 10%
+    const actualPremium = b.premium_paid ? new Decimal(b.premium_paid) : premium;
+    if (actualPremium.lte(0)) return res.status(400).json({ error: 'invalid_premium' });
 
     // Verify the holding exists and belongs to the user (if provided)
     if (b.holding_id) {
@@ -84,11 +90,11 @@ router.post('/purchase', async (req, res, next) => {
         sourceType: 'insurance_premium',
         sourceId: idem,
         currency: 'USDT',
-        memo: `insurance premium ${idem}`,
+        memo: `insurance premium ${idem} - 10% profit share`,
         idempotencyKey: `ins:premium:${idem}`,
         lines: [
-          { account: 'LIAB:sim_usdt', debit: premium.toFixed(4) },
-          { account: 'REV:insurance_premiums', credit: premium.toFixed(4) },
+          { account: 'LIAB:sim_usdt', debit: actualPremium.toFixed(4) },
+          { account: 'REV:insurance_premiums', credit: actualPremium.toFixed(4) },
         ],
       });
     } catch (e) {
@@ -98,11 +104,11 @@ router.post('/purchase', async (req, res, next) => {
     const p = await pool.query(
       `insert into insurance_policies (user_id, token_code, holding_id, coverage_amount, premium_paid, expires_at, terms, status)
        values ($1,$2,$3,$4,$5,$6,$7,'active') returning *`,
-      [req.user.id, b.token_code, b.holding_id || null, coverage.toFixed(4), premium.toFixed(4), expiresAt, b.terms]
+      [req.user.id, b.token_code, b.holding_id || null, coverage.toFixed(4), actualPremium.toFixed(4), expiresAt, b.terms]
     );
 
-    await audit(req, 'insurance.purchase', 'insurance_policy', p.rows[0].id, { coverage: b.coverage_amount, premium: b.premium_paid });
-    res.status(201).json({ policy: p.rows[0] });
+    await audit(req, 'insurance.purchase', 'insurance_policy', p.rows[0].id, { coverage: b.coverage_amount, premium: actualPremium.toFixed(4), netCoverage: netCoverage.toFixed(4) });
+    res.status(201).json({ policy: p.rows[0], premiumRate: '10%', netCoverage: netCoverage.toFixed(4) });
   } catch (e) { next(e); }
 });
 
