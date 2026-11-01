@@ -107,7 +107,7 @@ router.post('/purchase', async (req, res, next) => {
 
     const h = await pool.query(
       `insert into token_holdings (id, user_id, token_code, qty, cost_usdt, lock_days, status, purchased_at, matures_at)
-       values ($1,$2,'TKX-SIM',$3,$4,$5,'locked',now(),$6) returning *`,
+       values ($1,$2,'TKX',$3,$4,$5,'locked',now(),$6) returning *`,
       [holdingId, req.user.id, cost.toFixed(4), cost.toFixed(4), b.lock_days, mat.toISOString()]
     );
     const c = await pool.query(
