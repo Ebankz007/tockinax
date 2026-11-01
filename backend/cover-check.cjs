@@ -19,8 +19,15 @@ const H = (t) => ({ Authorization: 'Bearer ' + t });
 
 (async () => {
   const ts = Date.now();
+
+  // 0. create a referrer via direct DB insert (self-registration now requires a code)
+  const refEmail = `cov-ref${ts}@test.com`;
+  const refHash = await bcrypt.hash('SuperSecure123!', 12);
+  const refCode = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 8);
+  await pool.query(`insert into users (email, password_hash, status, referral_code, email_verified_at) values ($1,$2,'active',$3,now())`, [refEmail, refHash, refCode]);
+
   const reg = async (email) => {
-    const r = await request(app).post('/api/v1/auth/register').send({ email, password: 'SuperSecure123!', acceptTerms: true });
+    const r = await request(app).post('/api/v1/auth/register').send({ email, password: 'SuperSecure123!', referralCode: refCode, acceptTerms: true });
     await request(app).post('/api/v1/auth/verify-email').send({ email, token: r.body.devVerifyToken });
     const l = await request(app).post('/api/v1/auth/login').send({ email, password: 'SuperSecure123!' });
     return { token: l.body.access };
