@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import localFont from 'next/font/local';
 import Logo from '@/components/Logo';
+import { AuthHeader } from '@/components/AuthHeader';
 import './globals.css';
 
 // Self-hosted variable fonts (SIL OFL 1.1 — see app/fonts/OFL.txt).
@@ -97,18 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
 
             <div className="ml-auto flex items-center gap-2">
-              <Link
-                href="/login"
-                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-bright transition-colors hover:bg-white/5"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-lg bg-gold px-3.5 py-1.5 text-sm font-bold text-black transition-colors hover:bg-goldhover"
-              >
-                Get started
-              </Link>
+              <AuthHeader />
             </div>
           </div>
         </header>

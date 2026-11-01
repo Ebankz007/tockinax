@@ -11,12 +11,64 @@ export class ApiError extends Error {
   }
 }
 
+const REFRESH_KEY = 'tockinax_refresh_token';
+
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (isRefreshing && refreshPromise) return refreshPromise;
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const refresh = typeof localStorage !== 'undefined' ? localStorage.getItem(REFRESH_KEY) : null;
+      if (!refresh) return null;
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.access) return data.access;
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     ...init,
   });
+
+  if (res.status === 401 && !path.endsWith('/auth/refresh')) {
+    const newAccess = await refreshAccessToken();
+    if (newAccess) {
+      const retry = await fetch(`${API_BASE}${path}`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newAccess}`,
+          ...(init?.headers || {}),
+        },
+        ...init,
+      });
+      const text = await retry.text();
+      let data: unknown = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!retry.ok) throw new ApiError(retry.status, data);
+      return data as T;
+    }
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(REFRESH_KEY);
+    throw new ApiError(res.status, await res.text().then(t => { try { return JSON.parse(t); } catch { return t; } }));
+  }
+
   const text = await res.text();
   let data: unknown = null;
   try {
@@ -321,7 +373,8 @@ export type InsuranceClaim = {
   user_email?: string;
 };
 
-/** Module fetch state: 'live' | 'deploying' (404/backend missing) | 'error' | 'forbidden'. Never throws. */
+/* ---------- Module state ---------- */
+
 export type ModuleState<T> =
   | { state: 'loading' }
   | { state: 'live'; data: T }
@@ -334,12 +387,11 @@ export function isMissing(e: unknown): boolean {
     if (e.status === 404 || e.status === 501 || e.status === 503) return true;
     if (e.status >= 500) return true;
   } else if (e instanceof TypeError) {
-    return true; // network failure — backend not reachable
+    return true;
   }
   return false;
 }
 
-/** GET that never throws: maps 404/5xx/network issues to 'deploying'. */
 export async function fetchModule<T>(path: string): Promise<Exclude<ModuleState<T>, { state: 'loading' }>> {
   try {
     const data = await api.get<T>(path);

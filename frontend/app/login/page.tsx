@@ -23,7 +23,10 @@ export default function LoginPage() {
     setError('');
     try {
       if (step === 'credentials') {
-        const res = await api.post<{ mfa_required?: boolean; userId?: string | null; email?: string | null; challenge?: string | null }>('/auth/login', { email, password });
+        const res = await api.post<{ mfa_required?: boolean; userId?: string | null; email?: string | null; challenge?: string | null; refresh?: string }>('/auth/login', { email, password });
+        if (res.refresh && typeof localStorage !== 'undefined') {
+          localStorage.setItem('tockinax_refresh_token', res.refresh);
+        }
         if (res.mfa_required && res.userId && res.email && res.challenge) {
           setMfaUser({ userId: res.userId, email: res.email, challenge: res.challenge });
           setStep('twofa');

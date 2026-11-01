@@ -157,7 +157,25 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', authRequired, async (req, res) => {
   const pool = getPool();
   const r = await pool.query(`select u.id, u.email, u.status, u.referral_code, p.display_name, u.mfa_enabled from users u left join user_profiles p on p.user_id=u.id where u.id=$1`, [req.user.id]);
-  res.json(r.rows[0]);
+  const roles = await pool.query(`select rl.name from roles rl join user_roles ur on ur.role_id=rl.id where ur.user_id=$1`, [req.user.id]);
+  res.json({ ...r.rows[0], roles: roles.rows.map(x => x.name) });
+});
+
+// POST /auth/refresh — exchange a valid refresh token for a new access token
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const { refresh } = z.object({ refresh: z.string().min(1) }).parse(req.body);
+    const pool = getPool();
+    const rHash = crypto.createHash('sha256').update(refresh).digest('hex');
+    const s = await pool.query(`select s.user_id, u.email, u.status from user_sessions s join users u on u.id=s.user_id where s.refresh_hash=$1 and s.expires_at > now()`, [rHash]);
+    if (!s.rowCount) return res.status(401).json({ error: 'invalid_refresh' });
+    const session = s.rows[0];
+    if (['suspended', 'banned'].includes(session.status)) return res.status(403).json({ error: 'account_blocked' });
+    const user = { id: session.user_id, email: session.email };
+    const access = signAccess(user);
+    res.cookie('tockinax_at', access, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000 });
+    res.json({ access });
+  } catch (e) { next(e); }
 });
 
 // ---- 2FA (TOTP) ----
