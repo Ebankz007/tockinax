@@ -26,8 +26,17 @@ function ok(name, cond, extra = '') {
   const adminEmail = `admin${ts}@test.com`;
   const pw = 'SuperSecure123!';
 
-  // 1. register buyer (fee disclosed)
-  let r = await request(app).post('/api/v1/auth/register').send({ email: buyerEmail, password: pw, acceptTerms: true });
+  // 0. create a referrer via direct DB insert (no self-registration without a code)
+  const referrerEmail = `ref${ts}@test.com`;
+  const refHash = await bcrypt.hash(pw, 12);
+  const refCode = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 8);
+  const refU = await pool.query(`insert into users (email, password_hash, status, referral_code, email_verified_at) values ($1,$2,'active',$3,now()) returning id, referral_code`, [referrerEmail, refHash, refCode]);
+  const refId = refU.rows[0].id;
+  await pool.query(`insert into user_profiles (user_id, display_name) values ($1,$2)`, [refId, 'ref']);
+  ok('referrer created', refCode.length > 0, `code=${refCode}`);
+
+  // 1. register buyer (fee disclosed, compulsory referral code)
+  let r = await request(app).post('/api/v1/auth/register').send({ email: buyerEmail, password: pw, referralCode: refCode, acceptTerms: true });
   ok('register buyer 201', r.status === 201, `-> ${r.status}`);
   ok('fee disclosed', r.body && r.body.fee, JSON.stringify(r.body.fee || {}).slice(0, 120));
   const buyerVerify = r.body.devVerifyToken;
@@ -114,14 +123,14 @@ function ok(name, cond, extra = '') {
   ok('inactive rules pay 0', Array.isArray(calc0) && calc0.length === 0, JSON.stringify(calc0).slice(0, 120));
   await pool.query(`insert into commission_rules (version, level, rate_bps, basis, confirmation_days, active, budget_cap) values (99,1,500,'eligible_verified_sales',0,true,100000) on conflict (version,level) do update set active=true`);
   // attribute buyer under an independent referrer (not the seller — engine skips seller-beneficiary to block wash)
-  const refEmail = `ref${ts}@test.com`;
-  const refHash = await bcrypt.hash(pw, 12);
-  const refCode = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 8);
-  const refU = await pool.query(`insert into users (email, password_hash, status, referral_code, email_verified_at) values ($1,$2,'active',$3,now()) returning id`, [refEmail, refHash, refCode]);
-  const refId = refU.rows[0].id;
-  await pool.query(`insert into user_profiles (user_id, display_name) values ($1,$2)`, [refId, 'ref']);
-  await pool.query(`insert into referrals (ancestor_id, descendant_id, depth) values ($1,(select id from users where lower(email)=$2),1) on conflict do nothing`, [refId, buyerEmail]);
-  await pool.query(`insert into referral_closure (ancestor_id, descendant_id, depth) values ($1,(select id from users where lower(email)=$2),1) on conflict do nothing`, [refId, buyerEmail]);
+  const commRefEmail = `commref${ts}@test.com`;
+  const commRefHash = await bcrypt.hash(pw, 12);
+  const commRefCode = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 8);
+  const commRefU = await pool.query(`insert into users (email, password_hash, status, referral_code, email_verified_at) values ($1,$2,'active',$3,now()) returning id`, [commRefEmail, commRefHash, commRefCode]);
+  const commRefId = commRefU.rows[0].id;
+  await pool.query(`insert into user_profiles (user_id, display_name) values ($1,$2)`, [commRefId, 'ref']);
+  await pool.query(`insert into referrals (ancestor_id, descendant_id, depth) values ($1,(select id from users where lower(email)=$2),1) on conflict do nothing`, [commRefId, buyerEmail]);
+  await pool.query(`insert into referral_closure (ancestor_id, descendant_id, depth) values ($1,(select id from users where lower(email)=$2),1) on conflict do nothing`, [commRefId, buyerEmail]);
   const calc1 = await calculateForOrder(order2);
   ok('active rule pays L1', calc1.length >= 1 && Number(calc1[0].amount) > 0, JSON.stringify(calc1).slice(0, 200));
   const calc2 = await calculateForOrder(order2);
