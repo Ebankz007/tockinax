@@ -308,4 +308,12 @@ router.post('/change-password', authRequired, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /auth/logout — clear the auth cookie
+router.post('/logout', authRequired, async (req, res, next) => {
+  try {
+    res.clearCookie('tockinax_at', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
