@@ -40,8 +40,7 @@ function RegisterForm() {
     <form onSubmit={submit} className="space-y-3">
       {error && <p className="alert-error" role="alert">{error}</p>}
       <div className="alert-info">
-        Community membership — no investment. Registration fee (if any) is disclosed here and confirmed
-        server-side. Commissions pay only on verified sales, never for recruitment.
+        Community membership. Fees (if any) are disclosed before you pay and confirmed server-side.
       </div>
       <div>
         <label className="label" htmlFor="reg-email">Email</label>
