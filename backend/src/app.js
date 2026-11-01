@@ -46,6 +46,8 @@ function buildApp() {
     catch (e) { res.status(503).json({ ok: false, error: e.message }); }
   });
 
+  app.use('/api/v1/insurance', require('./routes/v1.insurance'));
+  app.use('/api/v1/admin/insurance', require('./routes/v1.insurance').admin);
   app.use('/api/v1/auth', require('./routes/v1.auth'));
   app.use('/api/v1/marketplace', require('./routes/v1.marketplace'));
   app.use('/api/v1/referrals', require('./routes/v1.referrals'));
@@ -62,6 +64,7 @@ function buildApp() {
   app.use('/api/v1/tokens', require('./routes/v1.tokens'));
   app.use('/api/v1/tokens', tokenCompat.tokensCompat);
   app.use('/api/v1/tokenmarket', require('./routes/v1.tokenmarket'));
+  app.use('/api/v1/tokenmarket/admin', require('./routes/v1.tokenmarket').admin);
   app.use('/api/v1/tokenmarket', tokenCompat.tokenmarketCompat);
   app.use('/api/v1/deposits', require('./routes/v1.deposits'));
   app.use('/api/v1/deposits', tokenCompat.depositsCompat);

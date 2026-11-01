@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, ApiError, type ModuleState } from '@/lib/api';
 
@@ -62,7 +61,7 @@ function StagesInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Stages config <SimBadge />
+        Stages config
       </h1>
       {msg && <p className="alert-ok" role="status">{msg}</p>}
       {error && <p className="alert-error" role="alert">{error}</p>}

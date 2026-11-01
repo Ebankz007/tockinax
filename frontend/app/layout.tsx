@@ -33,7 +33,7 @@ const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
 export const metadata: Metadata = {
   title: 'TOCKINAX — Trade. Connect. Grow Globally.',
   description:
-    'TOCKINAX pilot: token purchase → timed lock → maturity → auto-list → partial fills → settlement. SIMULATED pilot — no real funds.',
+    'TOCKINAX: token purchase → timed lock → maturity → auto-list → partial fills → settlement. Target prices are not guaranteed — a sale requires a willing buyer.',
 };
 
 const PRIMARY_NAV: [string, string][] = [
@@ -83,10 +83,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="shrink-0" aria-label="TOCKINAX home">
               <Logo size={30} />
             </Link>
-
-            <span className="hidden rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-gold sm:inline">
-              SIMULATED PILOT
-            </span>
 
             <nav aria-label="Primary" className="hidden flex-1 items-center gap-1 md:flex">
               {PRIMARY_NAV.map(([label, href]) => (
@@ -148,7 +144,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Risk disclosure
               </p>
               <ul className="mt-2 grid gap-1 text-xs leading-relaxed text-mist sm:grid-cols-2">
-                <li>SIMULATED pilot — no real funds move.</li>
                 <li>Target prices are not guaranteed — a sale requires a willing buyer; unsold stays unsold.</li>
                 <li>Commission categories pay only on verified sales, after approval and funding.</li>
                 <li>USDT TRC-20 only, via the Pay2Crypto sandbox until approvals. Never share private keys.</li>

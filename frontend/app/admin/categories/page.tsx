@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, type CategoryRow, type ModuleState } from '@/lib/api';
 
@@ -36,7 +35,7 @@ function CategoriesInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Commission categories <SimBadge />
+        Commission categories
       </h1>
       <div className="card space-y-3">
         <p className="alert-info" role="note">

@@ -6,8 +6,8 @@ import { PLATFORM_RULES, targetResale, usdt } from '@/lib/plan';
 const PRESETS = [100, 500, 1000, 5000];
 
 /**
- * Lock simulator. Deliberately labelled "target": the maths is simple and real,
- * but a target price is not a return until a buyer pays it.
+ * Lock simulator. The maths is real — 1% per day simple, non-compounded — but
+ * a target resale price is not a return until a buyer pays it.
  */
 export default function LockSimulator() {
   const [amount, setAmount] = useState(1000);
@@ -23,7 +23,7 @@ export default function LockSimulator() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-display text-lg font-bold text-bright">Lock simulator</h3>
-          <p className="text-xs text-mist">Simple, non-compounded. Targets only.</p>
+          <p className="text-xs text-mist">Simple, non-compounded. Target resale price, not a guaranteed payout.</p>
         </div>
         <div className="inline-flex rounded-xl border border-edge/70 bg-ink p-1">
           {([7, 14] as const).map((d) => (

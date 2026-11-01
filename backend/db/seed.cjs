@@ -51,7 +51,10 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('MEMO:member_volume_NGN','MEMO','NGN','Member-to-member volume record (not company money)'),
     ('OPS:reward_funding','ASSET','USD','Documented company reward funding pool'),
     ('LIAB:sim_usdt','LIABILITY','USDT','Member SIM-USDT liability (simulated pilot balances)'),
-    ('SIM:usdt_clearing','ASSET','USDT','Simulated USDT clearing account for token-marketplace settlement')
+    ('SIM:usdt_clearing','ASSET','USDT','Simulated USDT clearing account for token-marketplace settlement'),
+    ('REV:insurance_premiums','REVENUE','USDT','Insurance premium revenue'),
+    ('REV:insurance_reserve','REVENUE','USDT','Insurance claim reserve'),
+    ('LIAB:insurance_claims','LIABILITY','USDT','Approved insurance claim liability pending payout')
     on conflict (code) do nothing`);
 
   // ---- Token-marketplace pilot seeds (all DISABLED-by-default where financial) ----

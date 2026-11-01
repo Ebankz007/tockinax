@@ -528,6 +528,35 @@ const commissionCategories = pgTable('commission_categories', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ---- Insurance ----
+const insurancePolicies = pgTable('insurance_policies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenCode: varchar('token_code', { length: 32 }).notNull(),
+  holdingId: uuid('holding_id').references(() => tokenHoldings.id, { onDelete: 'cascade' }),
+  coverageAmount: numeric('coverage_amount', { precision: 19, scale: 4 }).notNull(), // USDT covered
+  premiumPaid: numeric('premium_paid', { precision: 19, scale: 4 }).notNull(),       // USDT paid for the policy
+  status: varchar('status', { length: 24 }).notNull().default('active'),             // active | lapsed | claimed | cancelled
+  startsAt: timestamp('starts_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  terms: text('terms').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('insurance_policies_user_idx').on(t.userId), index('insurance_policies_status_idx').on(t.status)]);
+
+const insuranceClaims = pgTable('insurance_claims', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  policyId: uuid('policy_id').notNull().references(() => insurancePolicies.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 19, scale: 4 }).notNull(),                  // claim amount USDT
+  reason: varchar('reason', { length: 64 }).notNull(),                               // unsold_at_maturity | partial_fill_loss | platform_fault
+  evidenceRef: text('evidence_ref'),                                                 // storage key for supporting docs
+  status: varchar('status', { length: 24 }).notNull().default('pending'),            // pending | approved | rejected | paid
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  payoutId: uuid('payout_id').references(() => payoutRequests.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('insurance_claims_user_idx').on(t.userId), index('insurance_claims_status_idx').on(t.status)]);
+
 module.exports = {
   users, userProfiles, roles, permissions, userRoles, userSessions,
   identityChecks, consentRecords, serviceFees, servicePayments,
@@ -542,4 +571,5 @@ module.exports = {
   tokenDefinitions, pricingRules, tokenHoldings, participationCycles,
   stageDefinitions, stageHistory, stageRequests, tokenListings, tokenFills,
   commissionCategories,
+  insurancePolicies, insuranceClaims,
 };

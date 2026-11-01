@@ -154,3 +154,101 @@ router.get('/proceeds', async (req, res, next) => {
 
 module.exports = router;
 module.exports.validateBuyQty = validateBuyQty;
+
+// ---- Admin buyer pairing (mounted separately with admin gate) ----
+router.admin = express.Router();
+router.admin.use(authRequired);
+
+router.admin.use(async (req, res, next) => {
+  const pool = getPool();
+  const r = await pool.query(`select 1 from user_roles ur join roles rl on rl.id=ur.role_id where ur.user_id=$1 and rl.name='super_admin'`, [req.user.id]);
+  if (!r.rowCount) return res.status(403).json({ error: 'admin_only' });
+  next();
+});
+
+// POST /tokenmarket/admin/listings/:id/pair {buyer_id, qty}
+// Admin pairs a buyer with an open listing — works for open listings and for
+// locked ("clock") tokens whose holding has not yet matured. Creates a fill
+// and settles USDT buyer->seller through the ledger.
+router.admin.post('/listings/:id/pair', async (req, res, next) => {
+  try {
+    const { qty, buyer_id } = z.object({
+      qty: z.string().regex(/^\d+(\.\d{1,4})?$/),
+      buyer_id: z.string().uuid(),
+    }).parse(req.body);
+
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const l = await client.query(`select * from token_listings where id = $1 for update`, [req.params.id]);
+      if (!l.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'listing_not_found' }); }
+      const listing = l.rows[0];
+      if (!['open', 'partial'].includes(listing.status)) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'listing_not_open', status: listing.status });
+      }
+
+      const qDec = new Decimal(qty);
+      try { validateBuyQty(listing.remaining_qty, qDec); }
+      catch (e) { await client.query('ROLLBACK'); return res.status(409).json({ error: e.message === 'oversell' ? 'insufficient_remaining' : 'invalid_qty', remaining: listing.remaining_qty }); }
+
+      const unitDec = new Decimal(listing.ask_unit_price);
+      const totalDec = qDec.mul(unitDec);
+      const total = totalDec.toFixed(4);
+
+      // Verify buyer exists
+      const b = await client.query(`select id from users where id = $1`, [buyer_id]);
+      if (!b.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'buyer_not_found' }); }
+
+      const fillId = crypto.randomUUID();
+      const idem = 'tkxpair-' + crypto.createHash('sha256').update(`${listing.id}:${buyer_id}:${qty}:${total}:admin`).digest('hex').slice(0, 32);
+      const ledgerKey = `ledger:${idem}`;
+      const exTx = await client.query(`select id from ledger_transactions where idempotency_key = $1`, [ledgerKey]);
+      let txId;
+      if (exTx.rowCount) {
+        txId = exTx.rows[0].id;
+      } else {
+        const txIns = await client.query(
+          `insert into ledger_transactions (source_type, source_id, currency, memo, idempotency_key)
+           values ('token_pair_fill', $1, 'USDT', $2, $3) on conflict (idempotency_key) do nothing returning id`,
+          [fillId, `admin paired fill ${fillId} listing ${listing.id} buyer ${buyer_id}`, ledgerKey]
+        );
+        if (txIns.rowCount) txId = txIns.rows[0].id;
+        if (!txId) {
+          const again = await client.query(`select id from ledger_transactions where idempotency_key=$1`, [ledgerKey]);
+          txId = again.rows[0].id;
+        } else {
+          const legs = [
+            { account: 'LIAB:sim_usdt', debit: total, credit: '0' },
+            { account: 'SIM:usdt_clearing', debit: '0', credit: total },
+            { account: 'SIM:usdt_clearing', debit: total, credit: '0' },
+            { account: 'LIAB:sim_usdt', debit: '0', credit: total },
+          ];
+          for (const leg of legs) {
+            await client.query(`insert into ledger_entries (tx_id, account, debit, credit) values ($1,$2,$3,$4)`, [txId, leg.account, leg.debit, leg.credit]);
+          }
+          const chk = await client.query(`select sum(debit)::text as d, sum(credit)::text as c from ledger_entries where tx_id=$1`, [txId]);
+          if (chk.rows[0].d !== chk.rows[0].c) throw new Error('balance check failed');
+        }
+      }
+
+      const newRemaining = new Decimal(listing.remaining_qty).minus(qDec).toFixed(4);
+      const newStatus = new Decimal(newRemaining).equals(0) ? 'filled' : 'partial';
+      await client.query(`update token_listings set remaining_qty=$1, status=$2, updated_at=now() where id=$3`, [newRemaining, newStatus, listing.id]);
+      const fill = await client.query(
+        `insert into token_fills (id, listing_id, buyer_id, qty, unit_price, total, idempotency)
+         values ($1,$2,$3,$4,$5,$6,$7) on conflict (idempotency) do nothing returning *`,
+        [fillId, listing.id, buyer_id, qDec.toFixed(4), unitDec.toFixed(4), total, idem]
+      );
+      await client.query('COMMIT');
+      const row = fill.rowCount ? fill.rows[0] : (await pool.query(`select * from token_fills where idempotency=$1`, [idem])).rows[0];
+      res.status(201).json({ fill: row, listing_status: newStatus, remaining_qty: newRemaining, settled: true, paired_by_admin: true });
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally { client.release(); }
+  } catch (e) { next(e); }
+});
+

@@ -124,4 +124,95 @@ router.get('/audit', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ---- Package management (token definitions + pricing) ----
+
+// GET /admin/packages — token definitions
+router.get('/packages', async (req, res, next) => {
+  try {
+    const r = await getPool().query(`select * from token_definitions order by code`);
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
+// POST /admin/packages — create a token definition
+router.post('/packages', async (req, res, next) => {
+  try {
+    const b = z.object({
+      code: z.string().min(1).max(32),
+      name: z.string().min(1).max(120),
+      kind: z.string().min(1).max(24).default('STANDARD'),
+      total_supply: z.string().regex(/^\d+(\.\d{1,4})?$/).default('0'),
+      basis: z.string().optional().default(''),
+      rights: z.string().optional().default(''),
+      active: z.boolean().default(true),
+    }).parse(req.body);
+    const pool = getPool();
+    const r = await pool.query(
+      `insert into token_definitions (code, name, kind, total_supply, basis, rights, active)
+       values ($1,$2,$3,$4,$5,$6,$7) returning *`,
+      [b.code, b.name, b.kind, b.total_supply, b.basis, b.rights, b.active]
+    );
+    await audit(req, 'package.create', 'token_definition', r.rows[0].code, b);
+    res.status(201).json({ item: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// PUT /admin/packages/:code — update a token definition
+router.put('/packages/:code', async (req, res, next) => {
+  try {
+    const b = z.object({
+      name: z.string().min(1).max(120).optional(),
+      kind: z.string().min(1).max(24).optional(),
+      total_supply: z.string().regex(/^\d+(\.\d{1,4})?$/).optional(),
+      basis: z.string().optional(),
+      rights: z.string().optional(),
+      active: z.boolean().optional(),
+    }).parse(req.body);
+    const pool = getPool();
+    const fields = [];
+    const vals = [];
+    let i = 1;
+    for (const [k, v] of Object.entries(b)) {
+      if (v !== undefined) { fields.push(`${k} = $${i++}`); vals.push(k === 'total_supply' || k === 'active' ? v : v); }
+    }
+    if (!fields.length) return res.status(400).json({ error: 'no_fields' });
+    vals.push(req.params.code);
+    const r = await pool.query(`update token_definitions set ${fields.join(', ')}, updated_at=now() where code=$${i} returning *`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'not_found' });
+    await audit(req, 'package.update', 'token_definition', req.params.code, b);
+    res.json({ item: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// GET /admin/packages/pricing — pricing rules
+router.get('/packages/pricing', async (req, res, next) => {
+  try {
+    const r = await getPool().query(`select * from pricing_rules order by version, lock_days`);
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
+// POST /admin/packages/pricing — create/update a pricing rule
+router.post('/packages/pricing', async (req, res, next) => {
+  try {
+    const b = z.object({
+      version: z.coerce.number().int().min(1).default(1),
+      lock_days: z.coerce.number().int().min(1),
+      rate_bps_per_day: z.coerce.number().int().min(0),
+      basis: z.string().min(1).max(16).default('simple'),
+      active: z.boolean().default(true),
+    }).parse(req.body);
+    const pool = getPool();
+    const r = await pool.query(
+      `insert into pricing_rules (version, lock_days, rate_bps_per_day, basis, active)
+       values ($1,$2,$3,$4,$5)
+       on conflict (version, lock_days) do update set rate_bps_per_day=excluded.rate_bps_per_day, basis=excluded.basis, active=excluded.active
+       returning *`,
+      [b.version, b.lock_days, b.rate_bps_per_day, b.basis, b.active]
+    );
+    await audit(req, 'pricing.upsert', 'pricing_rule', `v${b.version}/lock${b.lock_days}`, b);
+    res.status(201).json({ item: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

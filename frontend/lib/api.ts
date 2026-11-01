@@ -234,6 +234,44 @@ export type CategoryRow = {
   status?: string;
 };
 
+/* ---------- Insurance ---------- */
+
+export type InsurancePolicy = {
+  id: string;
+  user_id: string;
+  token_code: string;
+  holding_id?: string | null;
+  coverage_amount: string | number;
+  premium_paid: string | number;
+  status: string;
+  starts_at?: string;
+  expires_at?: string;
+  terms?: string;
+  created_at?: string;
+  cost_usdt?: string | number;
+  lock_days?: number;
+  holding_status?: string;
+  matures_at?: string | null;
+  user_email?: string;
+};
+
+export type InsuranceClaim = {
+  id: string;
+  policy_id: string;
+  user_id: string;
+  amount: string | number;
+  reason: string;
+  evidence_ref?: string | null;
+  status: string;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  payout_id?: string | null;
+  created_at?: string;
+  token_code?: string;
+  coverage_amount?: string | number;
+  user_email?: string;
+};
+
 /** Module fetch state: 'live' | 'deploying' (404/backend missing) | 'error' | 'forbidden'. Never throws. */
 export type ModuleState<T> =
   | { state: 'loading' }

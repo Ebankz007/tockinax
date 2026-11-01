@@ -1,6 +1,6 @@
 export function SimBadge({ label = 'SIM' }: { label?: string }) {
   return (
-    <span className="badge-sim" title="SIMULATED pilot — no real funds">
+    <span className="badge-sim" title="Pilot module — placeholder until live API lands">
       {label}
     </span>
   );

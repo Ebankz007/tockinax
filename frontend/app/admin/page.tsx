@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Stat from '@/components/Stat';
-import { SimBadge } from '@/components/Badges';
 import { api, errMsg, fetchModule, ApiError, type ModuleState } from '@/lib/api';
 
 type Overview = {
@@ -56,7 +55,7 @@ function AdminInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Admin overview <SimBadge />
+        Admin overview
       </h1>
       {error && <p className="alert-error" role="alert">{error}</p>}
       {data && (
@@ -91,9 +90,11 @@ function AdminInner() {
         <Link href="/admin/deposits" className="btn-secondary">Deposits review</Link>
         <Link href="/admin/withdrawals" className="btn-secondary">Withdrawals review</Link>
         <Link href="/admin/stages" className="btn-secondary">Stages config</Link>
+        <Link href="/admin/packages" className="btn-secondary">Packages</Link>
         <Link href="/admin/categories" className="btn-secondary">Categories</Link>
         <Link href="/admin/moderation" className="btn-secondary">Moderation</Link>
         <Link href="/admin/finance" className="btn-secondary">Finance</Link>
+        <Link href="/admin/insurance" className="btn-secondary">Insurance</Link>
         <Link href="/admin/content" className="btn-secondary">Content</Link>
         <Link href="/admin/users" className="btn-secondary">Users</Link>
       </nav>

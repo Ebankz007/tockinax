@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, ApiError, type ModuleState, type TokenDef, type PricingVersion, type TokenListing } from '@/lib/api';
 
@@ -22,6 +21,8 @@ function TokenOpsInner() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  const [pairBusy, setPairBusy] = useState<string | null>(null);
+  const [pairForm, setPairForm] = useState<{ listingId: string | null; buyerId: string; qty: string }>({ listingId: null, buyerId: '', qty: '' });
 
   async function decide(id: string, approve: boolean) {
     setBusy(id);
@@ -39,12 +40,26 @@ function TokenOpsInner() {
     }
   }
 
+  async function pairBuyer(listingId: string) {
+    setPairBusy(listingId);
+    setError(''); setMsg('');
+    try {
+      await api.post(`/tokenmarket/admin/listings/${listingId}/pair`, { buyer_id: pairForm.buyerId, qty: pairForm.qty });
+      setMsg(`Buyer paired with listing ${listingId}.`);
+      setPairForm({ listingId: null, buyerId: '', qty: '' });
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setPairBusy(null);
+    }
+  }
+
   const liveListings = listings.state === 'live' ? listOf<TokenListing>(listings.data) : [];
 
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Token ops <SimBadge />
+        Token ops
       </h1>
       {msg && <p className="alert-ok" role="status">{msg}</p>}
       {error && <p className="alert-error" role="alert">{error}</p>}
@@ -106,23 +121,36 @@ function TokenOpsInner() {
       <div className="card space-y-2">
         <h2 className="font-display font-semibold text-white">Listings oversight</h2>
         {listings.state === 'loading' && <p role="status">Loading…</p>}
-        {listings.state === 'deploying' && <ModuleEmpty title="Listings oversight deploying." hint="Approve/reject buttons activate when the backend lands. Until then they stay disabled. SIMULATED pilot — no real funds." showRiskLink={false} />}
+        {listings.state === 'deploying' && <ModuleEmpty title="Listings oversight deploying." hint="Approve/reject buttons activate when the backend lands. Until then they stay disabled." showRiskLink={false} />}
         {listings.state === 'forbidden' && <p className="alert-error" role="alert">Gated: super_admin role required.</p>}
         {listings.state === 'error' && <p className="alert-error" role="alert">{listings.message}</p>}
         {listings.state === 'live' && liveListings.length === 0 && <Empty title="No listings to review." />}
-        {liveListings.map((l) => (
-          <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line/10 bg-coal p-3 text-sm">
-            <span className="text-white">{l.token_code || 'Pilot token'} · {String(l.price)} · {l.status || 'open'}</span>
-            <span className="flex gap-2">
-              <button className="btn-primary px-3 py-1 text-sm" disabled={busy !== null} onClick={() => decide(l.id, true)}>
-                {busy === l.id ? '…' : 'Approve'}
-              </button>
-              <button className="btn-danger px-3 py-1 text-sm" disabled={busy !== null} onClick={() => decide(l.id, false)}>
-                Reject
-              </button>
-            </span>
-          </div>
-        ))}
+        {liveListings.map((l) => {
+          const isPairing = pairForm.listingId === l.id;
+          return (
+            <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line/10 bg-coal p-3 text-sm">
+              <span className="text-white">{l.token_code || 'Pilot token'} · {String(l.price)} · {l.status || 'open'}</span>
+              <span className="flex flex-wrap gap-2">
+                <button className="btn-primary px-3 py-1 text-sm" disabled={busy !== null} onClick={() => decide(l.id, true)}>
+                  {busy === l.id ? '…' : 'Approve'}
+                </button>
+                <button className="btn-danger px-3 py-1 text-sm" disabled={busy !== null} onClick={() => decide(l.id, false)}>
+                  Reject
+                </button>
+                {isPairing ? (
+                  <div className="flex items-center gap-1">
+                    <input className="input px-2 py-1 text-xs w-[90px]" placeholder="buyer id" value={pairForm.buyerId} onChange={(e) => setPairForm({ ...pairForm, buyerId: e.target.value })} />
+                    <input className="input px-2 py-1 text-xs w-[70px]" placeholder="qty" value={pairForm.qty} onChange={(e) => setPairForm({ ...pairForm, qty: e.target.value })} />
+                    <button className="btn-secondary px-2 py-1 text-xs" disabled={pairBusy !== null} onClick={() => void pairBuyer(l.id)}>{pairBusy === l.id ? '…' : 'Pair'}</button>
+                    <button className="btn-danger px-2 py-1 text-xs" onClick={() => setPairForm({ listingId: null, buyerId: '', qty: '' })}>Cancel</button>
+                  </div>
+                ) : (
+                  <button className="btn-secondary px-3 py-1 text-sm" onClick={() => setPairForm({ listingId: l.id, buyerId: '', qty: '' })}>Pair buyer</button>
+                )}
+              </span>
+            </div>
+          );
+        })}
         {listings.state === 'deploying' && (
           <div className="flex gap-2">
             <button className="btn-primary px-3 py-1 text-sm" disabled>Approve</button>

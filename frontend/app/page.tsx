@@ -45,7 +45,7 @@ export default function Home() {
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="hero-glow relative overflow-hidden rounded-3xl border border-edge/70 bg-surface px-6 py-12 sm:px-10 sm:py-16">
         <div className="relative mx-auto max-w-3xl text-center">
-          <span className="eyebrow">Simulated pilot — no real funds</span>
+          <span className="eyebrow">Token purchase → timed lock → maturity → auto-list → partial fills → settlement</span>
 
           <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-bright sm:text-5xl lg:text-6xl">
             Trade. Connect.
@@ -54,10 +54,10 @@ export default function Home() {
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-mist sm:text-lg">
-            Purchase pilot tokens in USDT, lock them for{' '}
+            Purchase tokens in USDT, lock them for{' '}
             <strong className="font-semibold text-bright">7 or 14 days</strong>, then list at
-            maturity for partial fills. Every step is simulated — and every target price still
-            needs a willing buyer.
+            maturity for partial fills. Every target price still needs a willing buyer —
+            a listing is not a sale.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -260,11 +260,11 @@ export default function Home() {
       {/* ── Closing CTA ──────────────────────────────────────── */}
       <section className="rounded-3xl border border-gold/25 bg-gradient-to-br from-gold/[0.08] to-transparent px-6 py-12 text-center sm:px-10">
         <h2 className="font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
-          Start with a simulated cycle
+          Start with a cycle
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-mist">
-          Create an account, activate, and run a 7-day lock end to end. Nothing moves real money
-          while the pilot is in this state.
+          Create an account, activate, and run a 7-day lock end to end. Every target price is a
+          listing price, not a payout — it is only realised if a buyer takes the position.
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <Link

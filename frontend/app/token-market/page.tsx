@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RiskStrip from '@/components/RiskStrip';
-import { LiveChip, SimBadge } from '@/components/Badges';
+import { LiveChip } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, num, type ModuleState, type TokenListing } from '@/lib/api';
 
@@ -28,13 +28,13 @@ export default function TokenMarketPage() {
 
   const live = mod.state === 'live' ? listOf<TokenListing>(mod.data) : [];
   const rows = live.length > 0 || mod.state === 'live' ? live : PREVIEW;
-  const simulated = !(mod.state === 'live' && live.length > 0);
+  const preview = !(mod.state === 'live' && live.length > 0);
 
   return (
     <div className="space-y-4">
       <div className="card space-y-3">
         <h1 className="font-display text-2xl font-bold text-white">
-          Token market {simulated && <SimBadge />} 
+          Token market
         </h1>
         <p className="text-sm text-mist">
           Matured positions auto-list here at their target price. You don&apos;t have to wait for
@@ -45,7 +45,7 @@ export default function TokenMarketPage() {
         <LiveChip live={mod.state === 'live' ? true : mod.state === 'loading' ? null : false} what="Token market API" />
         {mod.state === 'loading' && <p role="status">Loading listings…</p>}
         {mod.state === 'deploying' && (
-          <ModuleEmpty title="Token market module deploying." hint="Showing a simulated preview of how listings will look. SIMULATED pilot — no real funds." />
+          <ModuleEmpty title="Token market module deploying." hint="Showing a preview of how listings will look once the API lands." />
         )}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}
         {rows.length === 0 && mod.state === 'live' ? (
@@ -78,7 +78,7 @@ export default function TokenMarketPage() {
                         <td>{l.status || 'open'}</td>
                         <td>
                           <Link href="/dashboard/token-market" className="text-gold underline">
-                            {simulated ? 'Preview buy →' : 'Buy →'}
+                            {preview ? 'Preview buy →' : 'Buy →'}
                           </Link>
                         </td>
                       </tr>
@@ -90,8 +90,8 @@ export default function TokenMarketPage() {
           )
         )}
         <p className="text-xs text-mist">
-          {simulated
-            ? 'Preview rows are simulated placeholders, not real listings.'
+          {preview
+            ? 'Preview rows are placeholders, not real listings.'
             : 'Live listings from the token market API.'}{' '}
           <Link href="/risk" className="text-gold underline">Risk disclosure</Link>
         </p>
