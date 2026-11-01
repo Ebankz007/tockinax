@@ -99,9 +99,10 @@ function AdminInner() {
         <Link href="/admin/content" className="btn-secondary">Content</Link>
         <Link href="/admin/users" className="btn-secondary">Users</Link>
         <Link href="/admin/roles" className="btn-secondary">Roles & permissions</Link>
+        <Link href="/change-password" className="btn-secondary">Change password</Link>
         <button
           onClick={() => void window.location.href = '/api/v1/auth/logout'}
-          className="btn-danger w-full mt-2 text-sm"
+          className="btn-danger text-sm"
           aria-label="Logout"
         >
           Logout
