@@ -18,8 +18,17 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
 
 (async () => {
   const ts = Date.now();
+
+  // 0. create a referrer via direct DB insert (self-registration now requires a code)
+  const bcrypt = require('bcryptjs');
+  const crypto = require('crypto');
+  const refEmail = `tkx-ref${ts}@test.com`;
+  const refHash = await bcrypt.hash('SuperSecure123!', 12);
+  const refCode = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 8);
+  await pool.query(`insert into users (email, password_hash, status, referral_code, email_verified_at) values ($1,$2,'active',$3,now())`, [refEmail, refHash, refCode]);
+
   const reg = async (email) => {
-    const r = await request(app).post('/api/v1/auth/register').send({ email, password: 'SuperSecure123!', acceptTerms: true });
+    const r = await request(app).post('/api/v1/auth/register').send({ email, password: 'SuperSecure123!', referralCode: refCode, acceptTerms: true });
     await request(app).post('/api/v1/auth/verify-email').send({ email, token: r.body.devVerifyToken });
     const l = await request(app).post('/api/v1/auth/login').send({ email, password: 'SuperSecure123!' });
     return { id: l.body.access ? (await pool.query(`select id from users where lower(email)=$1`, [email.toLowerCase()])).rows[0].id : null, token: l.body.access, email };
