@@ -97,7 +97,7 @@ export default function LoginPage() {
       </form>
       {step === 'credentials' && (
         <p className="text-sm text-slate-600">
-          No account? <Link href="/register" className="underline">Register</Link>. Session is set via a secure backend cookie.
+          No account? <Link href="/register" className="underline">Register</Link>. <Link href="/forgot-password" className="underline text-gold">Forgot password</Link>. Session is set via a secure backend cookie.
         </p>
       )}
       {step === 'twofa' && (
