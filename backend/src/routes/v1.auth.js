@@ -281,4 +281,29 @@ router.post('/2fa/validate', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /auth/change-password — require current password, set a new one
+router.post('/change-password', authRequired, async (req, res, next) => {
+  try {
+    const b = z.object({
+      current_password: z.string().min(1),
+      new_password: z.string().min(10).max(128),
+    }).parse(req.body);
+
+    const pool = getPool();
+    const u = await pool.query(`select password_hash from users where id=$1`, [req.user.id]);
+    if (!u.rowCount) return res.status(404).json({ error: 'not_found' });
+
+    const ok = await bcrypt.compare(b.current_password, u.rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'invalid_current_password' });
+
+    const hash = await bcrypt.hash(b.new_password, 12);
+    await pool.query(`update users set password_hash=$1 where id=$2`, [hash, req.user.id]);
+
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'auth.change_password','user',$2,{},$3)`,
+      [req.user.id, req.user.id, req.ip]);
+
+    res.json({ ok: true, message: 'Password changed successfully' });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

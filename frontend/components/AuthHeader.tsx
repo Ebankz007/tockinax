@@ -40,6 +40,9 @@ export function AuthHeader() {
         <Link href="/dashboard" className="rounded-lg bg-gold px-3.5 py-1.5 text-sm font-bold text-black transition-colors hover:bg-goldhover">
           Dashboard
         </Link>
+        <Link href="/change-password" className="rounded-lg px-3 py-1.5 text-sm font-semibold text-mist transition-colors hover:bg-white/5">
+          Change password
+        </Link>
       </div>
     );
   }
