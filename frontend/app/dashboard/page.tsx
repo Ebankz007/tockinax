@@ -122,6 +122,13 @@ function DashboardInner() {
         <Link href="/dashboard/payouts" className="btn-secondary">Payouts</Link>
         <Link href="/dashboard/wallet" className="btn-secondary">Wallet</Link>
         <Link href="/dashboard/support" className="btn-secondary">Support</Link>
+        <button
+          onClick={() => void window.location.href = '/api/v1/auth/logout'}
+          className="btn-danger w-full mt-2 text-sm"
+          aria-label="Logout"
+        >
+          Logout
+        </button>
       </nav>
       <RiskStrip compact />
     </div>
