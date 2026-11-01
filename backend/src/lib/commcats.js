@@ -1,4 +1,4 @@
-// Commission categories + generation gate — SIMULATED pilot, DISABLED by default.
+// Commission categories + generation gate — DISABLED by default.
 // Generation gate: maxGen = sponsor stage (stage_gens map 1->1 .. 5->5).
 // Rate capped at sponsor-stage rule; calculations store category+generation+rule_version.
 // All seed rules/categories are active=false so the engine records nothing payable.

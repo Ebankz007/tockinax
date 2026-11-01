@@ -5,7 +5,6 @@ import RequireAuth from '@/components/RequireAuth';
 import Stat from '@/components/Stat';
 import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import Countdown from '@/components/Countdown';
 import { api, errMsg, fetchModule, listOf, type ReferralMe, type Payout, type User, type Holding } from '@/lib/api';
 
@@ -50,7 +49,7 @@ function DashboardInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Dashboard <SimBadge />
+        Dashboard
       </h1>
       {error && <p className="alert-error" role="alert">{error}</p>}
       {me && (
@@ -58,13 +57,13 @@ function DashboardInner() {
           <Stat label="Account" value={me.status || 'member'} sub={me.email} />
           <Stat label="Direct referrals" value={String(ref?.direct.length ?? '—')} sub="Level 1 members" />
           <Stat label="Payout requests" value={String(payouts.length)} sub="All time" />
-          <Stat label="Token positions" value={holdings ? String(holdings.length) : tokensDeploying ? 'SIM' : '—'} sub={holdings ? 'Across cycles' : 'Token module deploying'} />
+          <Stat label="Token positions" value={holdings ? String(holdings.length) : tokensDeploying ? '—' : '—'} sub={holdings ? 'Across cycles' : 'Token module deploying'} />
         </div>
       )}
       <div className="card space-y-2">
         <h2 className="font-display font-semibold text-white">Token portfolio snapshot</h2>
         {holdings === null ? (
-          <Empty title={tokensDeploying ? 'Token module deploying — portfolio preview unavailable.' : 'No holdings yet.'} hint={tokensDeploying ? 'SIMULATED pilot — no real funds' : 'Buy and lock tokens to start a position.'} />
+          <Empty title={tokensDeploying ? 'Token module deploying — portfolio preview unavailable.' : 'No holdings yet.'} hint={tokensDeploying ? 'The tokens backend is still deploying.' : 'Buy and lock tokens to start a position.'} />
         ) : holdings.length === 0 ? (
           <Empty title="No holdings yet." hint="Buy and lock tokens to start a position." />
         ) : (

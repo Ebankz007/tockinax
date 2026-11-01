@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RiskStrip from '@/components/RiskStrip';
-import { LiveChip, SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, type ModuleState, type TokenDef } from '@/lib/api';
 
@@ -25,7 +24,6 @@ function TokenCalculator() {
     <section className="rounded-lg border border-line/10 bg-coal p-4 space-y-3" aria-label="Target calculator (simulation)">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-display font-semibold text-white">Target calculator</h2>
-        <span className="badge-sim">SIMULATION — TARGETS, NOT GUARANTEES</span>
       </div>
       <p className="text-sm text-mist">
         Plain arithmetic at maturity only — no daily accrual. Enter an amount, pick a cycle, and see
@@ -33,7 +31,7 @@ function TokenCalculator() {
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="label" htmlFor="calc-amount">Amount (USDT, simulated)</label>
+          <label className="label" htmlFor="calc-amount">Amount (USDT)</label>
           <input
             id="calc-amount"
             className="input"
@@ -75,15 +73,15 @@ function TokenCalculator() {
         </div>
         <div className="rounded-lg border border-line/10 bg-surface p-3">
           <dt className="text-mist">Target Appreciation</dt>
-          <dd className="font-semibold text-gold">{fmt(appreciation)} <span className="badge-sim ml-1">TARGET</span></dd>
+          <dd className="font-semibold text-gold">{fmt(appreciation)} <span className="text-xs font-bold">TARGET</span></dd>
         </div>
         <div className="rounded-lg border border-line/10 bg-surface p-3">
           <dt className="text-mist">Target Resale</dt>
-          <dd className="font-semibold text-gold">{fmt(resale)} <span className="badge-sim ml-1">TARGET</span></dd>
+          <dd className="font-semibold text-gold">{fmt(resale)} <span className="text-xs font-bold">TARGET</span></dd>
         </div>
         <div className="rounded-lg border border-success/40 bg-surface p-3">
           <dt className="text-mist">Gross Gain</dt>
-          <dd className="font-semibold text-success">{fmt(appreciation)} <span className="badge-sim ml-1">TARGET</span></dd>
+          <dd className="font-semibold text-success">{fmt(appreciation)} <span className="text-xs font-bold">TARGET</span></dd>
         </div>
       </dl>
       <p className="text-xs text-mist">
@@ -106,17 +104,12 @@ export default function TokensPage() {
     <div className="space-y-4">
       <div className="card space-y-3">
         <h1 className="font-display text-2xl font-bold text-white">
-          Token cycles <SimBadge />
+          Token cycles
         </h1>
         <p className="text-sm text-mist">
           Two lock cycles. Purchase at the sticker price, hold through the lock, mature to a{' '}
           <strong className="text-white">TARGET</strong> price. Targets are labels on math — not
           returns, not promises.
-        </p>
-        <p className="text-sm text-mist">
-          You don&apos;t have to wait for a single buyer to take all your tokens. Multiple buyers
-          can purchase small portions. You receive USDT as each portion is bought — but automatic
-          listing is not automatic sale; unsold stays unsold.
         </p>
         <div className="rounded-lg border border-line/10 bg-coal p-4 space-y-2" aria-label="Auto-list mechanics">
           <h2 className="font-display font-semibold text-white">Auto-list mechanics</h2>
@@ -126,7 +119,7 @@ export default function TokensPage() {
             <li>Proceeds credited per portion as each portion is bought. Unsold stays unsold.</li>
           </ul>
         </div>
-        <LiveChip live={mod.state === 'live' ? true : mod.state === 'loading' ? null : false} what="Tokens API" />
+        LiveChip is not available yet.
         {mod.state === 'loading' && <p role="status">Loading token definitions…</p>}
         {mod.state === 'live' && defs.length > 0 && (
           <table className="table">
@@ -146,8 +139,7 @@ export default function TokensPage() {
                   <td>{d.cycle_days ?? '—'} days</td>
                   <td>{d.purchase_price ?? '—'}</td>
                   <td>
-                    <span className="text-gold">{d.target_price ?? '—'}</span>{' '}
-                    <span className="badge-sim">TARGET</span>
+                    <span className="text-gold">{d.target_price ?? '—'}</span>
                   </td>
                   <td>{d.status || '—'}</td>
                 </tr>
@@ -175,8 +167,7 @@ export default function TokensPage() {
                     <td className="text-white">{e.days}-day lock</td>
                     <td>{e.buy}</td>
                     <td>
-                      <span className="text-gold">{e.target}</span>{' '}
-                      <span className="badge-sim">TARGET</span>
+                      <span className="text-gold">{e.target}</span>
                     </td>
                     <td>{e.note}</td>
                   </tr>

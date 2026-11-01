@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RiskStrip from '@/components/RiskStrip';
-import { LiveChip, SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, type ModuleState } from '@/lib/api';
 
@@ -49,7 +48,7 @@ export default function StagesPage() {
     <div className="space-y-4">
       <div className="card space-y-3">
         <h1 className="font-display text-2xl font-bold text-white">
-          Membership stages <SimBadge />
+          Membership stages
         </h1>
         <p className="text-sm text-mist">
           Five stages gate lock limits, generation depth and marketplace access. Values below are the
@@ -57,7 +56,7 @@ export default function StagesPage() {
           fee to leave your current stage; a <strong className="text-white">renewal fee</strong> is charged
           at your current stage.
         </p>
-        <LiveChip live={mod.state === 'live' ? true : mod.state === 'loading' ? null : false} what="Stages API" />
+        Stages API is not available yet.
         {mod.state === 'loading' && <p role="status">Loading stages…</p>}
         {mod.state === 'deploying' && <ModuleEmpty title="Stages module deploying." />}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}

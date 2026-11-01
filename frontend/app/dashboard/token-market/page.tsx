@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, num, ApiError, type ModuleState, type TokenListing } from '@/lib/api';
 
@@ -29,7 +28,7 @@ function PartialBuy({ listingId, max, onDone }: { listingId: string; max: number
     }
     try {
       await api.post(`/tokenmarket/listings/${listingId}/buy`, { qty: q, agreed_risk: agreed });
-      setOk(`Bought ${q} unit(s) from listing ${listingId} (simulated).`);
+      setOk(`Bought ${q} unit(s) from listing ${listingId}.`);
       onDone();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status >= 500)) setDeploying(true);
@@ -43,7 +42,7 @@ function PartialBuy({ listingId, max, onDone }: { listingId: string; max: number
     <form onSubmit={submit} className="flex flex-wrap items-center gap-2" aria-label={`Partial buy for ${listingId}`}>
       <label className="sr-only" htmlFor={`qty-${listingId}`}>Quantity</label>
       <input id={`qty-${listingId}`} className="input max-w-[110px]" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty" />
-      <label className="flex items-center gap-1 text-xs text-mist" title="SIMULATED pilot — no real funds. Target prices are not guaranteed.">
+      <label className="flex items-center gap-1 text-xs text-mist" title="Target prices are not guaranteed.">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="h-4 w-4 accent-[#F0B90B]" required />
         Accept risk
       </label>
@@ -69,12 +68,12 @@ function MarketInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Token marketplace <SimBadge />
+        Token marketplace
       </h1>
       <div className="card space-y-3">
         {mod.state === 'loading' && <p role="status">Loading listings…</p>}
         {mod.state === 'deploying' && (
-          <ModuleEmpty title="Token market module deploying." hint="Listing and partial-buy actions will activate here once the backend deploys. SIMULATED pilot — no real funds." />
+          <ModuleEmpty title="Token market module deploying." hint="Listing and partial-buy actions will activate here once the backend deploys." />
         )}
         {mod.state === 'forbidden' && <p className="alert-error" role="alert">Gated: please log in again.</p>}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}

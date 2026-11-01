@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import { SimBadge } from '@/components/Badges';
 
 const SECTIONS: [string, string[]][] = [
   [
-    '1. Simulated pilot — no real funds',
+    '1. No real funds yet',
     [
-      'SIMULATED pilot — no real funds. Every balance, token, listing, fill and payout in this pilot is a simulated record.',
-      'Do not send real money, real crypto, or real payment credentials to any address or person claiming to represent the pilot.',
+      'TOCKINAX is not live for real money. Every balance, token, listing, fill and payout shown today is a record only.',
+      'Do not send real money, real crypto, or real payment credentials to any address or person claiming to represent TOCKINAX.',
     ],
   ],
   [
@@ -51,7 +50,7 @@ const SECTIONS: [string, string[]][] = [
   [
     '7. Token business rules (condensed)',
     [
-      'Account activation: register, then activate membership. Stage limits and stage fees follow the approved compensation plan; activation fees are recorded but not enforced in this pilot.',
+      'Account activation: register, then activate membership. Stage limits and stage fees follow the approved compensation plan; activation fees are recorded but not enforced until live.',
       'Locking options: 7-day (+7%) or 14-day (+14%), 1%/day non-compounded. Example: purchase 100 → TARGET 107 / TARGET 114. Targets, not guarantees.',
       'Auto-list + partial sales: matured positions auto-list at target; buyers may take small portions; proceeds credited per portion as bought. Automatic listing is not automatic sale; unsold stays unsold.',
       '42-day rule: 3×14 or 6×7 cumulative locked days qualifies for stage advancement. Then choose upgrade vs renewal — upgrades cost 100 / 250 / 600 / 1500 USDT to leave stages 1–4; renewals are 25 / 50 / 120 / 300 / 600 USDT at the current stage.',
@@ -65,7 +64,7 @@ export default function RiskPage() {
     <div className="card space-y-5">
       <div>
         <h1 className="font-display text-2xl font-bold text-white">
-          Risk disclosure <SimBadge />
+          Risk disclosure
         </h1>
         <p className="mt-1 text-sm text-mist">
           Read this before using any money feature. It is linked from the footer and from every

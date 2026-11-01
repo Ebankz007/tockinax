@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 
 const GEN_RATES: [string, string][] = [
   ['Generation 1 (direct)', 'Pays on eligible verified sales after approval.'],
@@ -27,7 +26,7 @@ export default function ReferralsPage() {
     <div className="space-y-4">
       <div className="card space-y-4">
         <h1 className="font-display text-2xl font-bold text-white">
-          Referrals <SimBadge />
+          Referrals
         </h1>
         <p className="alert-info" role="note">
           Rates below are the approved compensation plan. Commissions pay only on verified sales

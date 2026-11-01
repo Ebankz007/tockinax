@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, num, ApiError, type WithdrawalReq, type ModuleState } from '@/lib/api';
 
@@ -38,7 +37,7 @@ function WithdrawalsInner() {
     }
     try {
       await api.post('/withdrawals/request', { amount: num(amount), currency: 'USDT', network: 'TRC20', address: address.trim() });
-      setOk('Withdrawal requested (simulated). It will show in history after review.');
+      setOk('Withdrawal requested. It will show in history after review.');
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status >= 500)) {
@@ -54,7 +53,7 @@ function WithdrawalsInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Withdrawals <SimBadge />
+        Withdrawals
       </h1>
       <div className="grid gap-4 lg:grid-cols-2">
         <form className="card space-y-3" onSubmit={submit} aria-label="Withdrawal request form">
@@ -102,7 +101,7 @@ function WithdrawalsInner() {
         </div>
       </div>
       <p className="text-sm text-mist">
-        SIMULATED pilot — no real funds.{' '}
+        No real funds move until live payments are enabled.{' '}
         <Link href="/risk" className="text-gold underline">Risk disclosure</Link>
       </p>
       <RiskStrip compact />

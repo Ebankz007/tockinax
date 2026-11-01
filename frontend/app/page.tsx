@@ -135,7 +135,7 @@ export default function Home() {
               <div key={d} className="rounded-2xl border border-edge/70 bg-surface p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-display text-base font-bold text-bright">{d}-day cycle</h3>
-                  <span className="badge-sim">Target</span>
+                  <span className="text-xs font-bold">Target</span>
                 </div>
                 <p className="mt-3 font-mono text-sm text-mist tnum">
                   100.00 <span className="text-mist">→</span>{' '}

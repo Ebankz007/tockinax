@@ -48,7 +48,7 @@ function StagesInner() {
     setError('');
     try {
       await api.put('/tokens/stages/config', { stage: n, ...drafts[n] });
-      setMsg(`Stage ${n} saved (simulated).`);
+      setMsg(`Stage ${n} saved.`);
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status === 405 || e.status >= 500)) {
         setError('Stages config is read-only — the API does not allow edits. Showing published values.');

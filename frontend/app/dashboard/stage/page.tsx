@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, ApiError, type ModuleState, type StageInfo } from '@/lib/api';
 
@@ -52,7 +51,7 @@ function StageInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        My stage <SimBadge />
+        My stage
       </h1>
       <div className="card space-y-3">
         {ok && <p className="alert-ok" role="status">{ok}</p>}

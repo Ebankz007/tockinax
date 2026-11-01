@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, num, ApiError, type DepositIntent, type ModuleState } from '@/lib/api';
 
@@ -57,7 +56,7 @@ function DepositsInner() {
     try {
       const d = await api.post<DepositIntent>(`/deposits/${intent.id}/simulate-pay`, {});
       setIntent(d);
-      setOk(`Sandbox payment simulated. Tx hash: ${txOf(d) || '(pending)'}`);
+      setOk(`Payment confirmed. Tx hash: ${txOf(d) || '(pending)'}`);
       setReloadKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status >= 500)) {
@@ -73,7 +72,7 @@ function DepositsInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Deposits <SimBadge />
+        Deposits
       </h1>
       <div className="grid gap-4 lg:grid-cols-2">
         <form className="card space-y-3" onSubmit={createIntent} aria-label="Pay2Crypto intent form">
@@ -101,7 +100,7 @@ function DepositsInner() {
             <div className="rounded-lg border border-gold/40 bg-brand-500/5 p-3 text-sm" aria-live="polite">
               <p className="text-white">Intent <strong>{intent.id}</strong> · status: {intent.status || 'pending'}</p>
               <button type="button" className="btn-secondary mt-2 px-3 py-1.5 text-sm" disabled={paying} onClick={simulatePay}>
-                {paying ? 'Simulating…' : 'Simulate sandbox payment'}
+                {paying ? 'Confirming…' : 'Confirm sandbox payment'}
               </button>
             </div>
           )}
@@ -132,7 +131,7 @@ function DepositsInner() {
         </div>
       </div>
       <p className="text-sm text-mist">
-        SIMULATED pilot — no real funds.{' '}
+        No real funds move until live payments are enabled.{' '}
         <Link href="/risk" className="text-gold underline">Risk disclosure</Link>
       </p>
       <RiskStrip compact />

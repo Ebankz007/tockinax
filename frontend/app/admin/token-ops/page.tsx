@@ -30,7 +30,7 @@ function TokenOpsInner() {
     setError('');
     try {
       await api.post(`/tokenmarket/admin/listings/${id}/decision`, { approve });
-      setMsg(`Listing ${id} ${approve ? 'approved' : 'rejected'} (simulated).`);
+      setMsg(`Listing ${id} ${approve ? 'approved' : 'rejected'}.`);
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) {
         setError('Token-ops backend deploying — decision unavailable.');

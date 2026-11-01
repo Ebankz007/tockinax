@@ -67,21 +67,21 @@ function AdminInner() {
         </div>
       )}
       <div className="card space-y-2">
-        <h2 className="font-display font-semibold text-white">Token KPIs (pilot)</h2>
+        <h2 className="font-display font-semibold text-white">Token KPIs</h2>
         {kpis.state === 'loading' && <p role="status">Loading token KPIs…</p>}
         {kpis.state === 'deploying' && (
           <p className="alert-warn" role="status">
-            Token KPI module deploying — <span className="badge-sim">SIM</span> SIMULATED pilot, no live figures yet.
+            Token KPI module deploying — no live figures yet.
           </p>
         )}
         {kpis.state === 'forbidden' && <p className="alert-error" role="alert">Gated: super_admin role required for token KPIs.</p>}
         {kpis.state === 'error' && <p className="alert-error" role="alert">{kpis.message}</p>}
         {kpis.state === 'live' && (
           <div className="grid gap-4 md:grid-cols-4">
-            <Stat label="Locked" value={String(kpis.data.locked ?? '—')} sub="Pilot positions" />
+            <Stat label="Locked" value={String(kpis.data.locked ?? '—')} sub="Positions" />
             <Stat label="Matured" value={String(kpis.data.matured ?? '—')} sub="Awaiting/listed" />
             <Stat label="Listed" value={String(kpis.data.listed ?? '—')} sub="On token market" />
-            <Stat label="Filled" value={String(kpis.data.filled ?? '—')} sub="Settled (sim)" />
+            <Stat label="Filled" value={String(kpis.data.filled ?? '—')} sub="Settled" />
           </div>
         )}
       </div>

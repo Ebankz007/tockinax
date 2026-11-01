@@ -177,7 +177,7 @@ function InsurancePage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Token code</label>
-                <input name="token_code" defaultValue="TKX-SIM" className="input w-full" required />
+                <input name="token_code" defaultValue="TKX" className="input w-full" required />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Holding ID (optional)</label>

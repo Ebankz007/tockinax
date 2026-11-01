@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, type ModuleState } from '@/lib/api';
 
@@ -49,11 +48,11 @@ function StatementInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Statement <SimBadge />
+        Statement
       </h1>
       <div className="card space-y-3">
         <p className="text-sm text-mist">
-          Your pilot activity as JSON, exported client-side to CSV. SIMULATED pilot — no real funds.
+          Your activity exported client-side to CSV.
         </p>
         {ok && <p className="alert-ok" role="status">{ok}</p>}
         {mod.state === 'loading' && <p role="status">Loading statement…</p>}

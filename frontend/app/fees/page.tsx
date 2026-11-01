@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import Empty from '@/components/Empty';
 import { api, errMsg } from '@/lib/api';
 
@@ -13,7 +12,7 @@ const PLACEHOLDERS: [string, string, string][] = [
   ['Stage upgrade', 'Per stage (approved)', 'Fee to leave your current stage: 1→2 100, 2→3 250, 3→4 600, 4→5 1500 USDT.'],
   ['Stage renewal', 'Per stage (approved)', 'Renewal at your current stage: S1 25, S2 50, S3 120, S4 300, S5 600 USDT.'],
   ['Marketplace order', '~1% platform accounting (configurable)', 'Recorded on completed orders; configurable by admin.'],
-  ['Token market fill fee', 'None (simulated)', 'Fills settle at the listing target price; no separate fill fee in the simulated pilot.'],
+  ['Token market fill fee', 'None', 'Fills settle at the listing target price; no separate fill fee.'],
   ['Payout / withdrawal', 'Method-dependent', 'Only from eligible, confirmed balances.'],
 ];
 
@@ -34,7 +33,7 @@ export default function FeesPage() {
     <div className="space-y-4">
       <div className="card space-y-4">
         <h1 className="font-display text-2xl font-bold text-white">
-          Fees &amp; refunds <SimBadge />
+          Fees &amp; refunds
         </h1>
         <p className="text-sm text-mist">
           Transparent pricing: registration, token and marketplace fees are disclosed before you
@@ -74,7 +73,7 @@ export default function FeesPage() {
         <h2 className="font-display font-semibold text-white">Refund policy</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-mist">
           <li>Registration fees are refundable only as stated in the fee disclosure shown at signup.</li>
-          <li>Token purchases in SIMULATED pilot move no real funds; lock positions are pilot records only.</li>
+          <li>Token purchases move no real funds until live payments are enabled; lock positions are records only.</li>
           <li>Marketplace payments go directly between members; the platform holds no funds and cannot reverse peer transfers.</li>
           <li>Disputed orders are reviewed case-by-case; completion requires confirmation or manual review.</li>
         </ul>

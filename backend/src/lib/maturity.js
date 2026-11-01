@@ -1,4 +1,4 @@
-// Maturity + settlement sweeps — SIMULATED pilot. Idempotent, Decimal-safe.
+// Maturity + settlement sweeps — Idempotent, Decimal-safe.
 // matureDue: locked + matures_at < now -> matured + auto-create token_listing at target price.
 // settleDue: fully filled listings -> holding settled + cycle success (partial proceeds already credited at fill time).
 const crypto = require('crypto');

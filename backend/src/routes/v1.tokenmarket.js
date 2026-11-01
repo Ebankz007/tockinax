@@ -1,4 +1,4 @@
-// Secondary token market — SIMULATED pilot, market-clearing: unsold stays unsold.
+// Secondary token market — market-clearing: unsold stays unsold.
 // NO auto-complete fiction: a fill completes ONLY here on settled USDT payment.
 // Oversell guard: SELECT ... FOR UPDATE + Decimal compare; idempotent fills.
 const express = require('express');

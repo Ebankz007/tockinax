@@ -432,7 +432,7 @@ const fraudRiskEvents = pgTable('fraud_risk_events', {
 const tokenDefinitions = pgTable('token_definitions', {
   code: varchar('code', { length: 32 }).primaryKey(),
   name: varchar('name', { length: 120 }).notNull(),
-  kind: varchar('kind', { length: 24 }).notNull().default('SIMULATED'),
+  kind: varchar('kind', { length: 24 }).notNull().default('STANDARD'),
   totalSupply: numeric('total_supply', { precision: 19, scale: 4 }).notNull().default('0'),
   basis: text('basis').notNull().default(''),
   rights: text('rights').notNull().default(''),

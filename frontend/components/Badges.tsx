@@ -1,11 +1,3 @@
-export function SimBadge({ label = 'SIM' }: { label?: string }) {
-  return (
-    <span className="badge-sim" title="Pilot module — placeholder until live API lands">
-      {label}
-    </span>
-  );
-}
-
 export function LiveChip({ live, what }: { live: boolean | null; what: string }) {
   if (live === null)
     return (
@@ -18,8 +10,8 @@ export function LiveChip({ live, what }: { live: boolean | null; what: string })
       {what}: Live API
     </span>
   ) : (
-    <span className="badge-warn" role="status" title="Backend module not reachable — showing pilot placeholders.">
-      {what}: module deploying <span className="badge-sim ml-1">SIM</span>
+    <span className="badge-warn" role="status" title="Backend module not reachable.">
+      {what}: module deploying
     </span>
   );
 }

@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { api, errMsg, fetchModule, listOf, ApiError, type DepositIntent, type ModuleState } from '@/lib/api';
 
@@ -25,7 +24,7 @@ function ReviewInner({ kind }: { kind: 'deposits' | 'withdrawals' }) {
     setError('');
     try {
       await api.post(`/${kind}/admin/${id}/decision`, { action });
-      setMsg(`${kind} ${id}: ${action} recorded (simulated).`);
+      setMsg(`${kind} ${id}: ${action} recorded.`);
       setMod(await fetchModule<unknown>(path));
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) {
@@ -42,16 +41,16 @@ function ReviewInner({ kind }: { kind: 'deposits' | 'withdrawals' }) {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        {kind === 'deposits' ? 'Deposits review' : 'Withdrawals review'} <SimBadge />
+        {kind === 'deposits' ? 'Deposits review' : 'Withdrawals review'}
       </h1>
       {msg && <p className="alert-ok" role="status">{msg}</p>}
       {error && <p className="alert-error" role="alert">{error}</p>}
       <div className="card space-y-3">
         <p className="alert-warn" role="note">
-          USDT TRC20 only via Pay2Crypto sandbox until approvals. Never share private keys. SIMULATED pilot — no real funds.
+          USDT TRC20 only via Pay2Crypto sandbox until approvals. Never share private keys.
         </p>
         {mod.state === 'loading' && <p role="status">Loading queue…</p>}
-        {mod.state === 'deploying' && <ModuleEmpty title={`${kind} review module deploying.`} hint="Approve / reject / execute buttons stay disabled until the backend lands. SIMULATED pilot — no real funds." showRiskLink={false} />}
+        {mod.state === 'deploying' && <ModuleEmpty title={`${kind} review module deploying.`} hint="Approve / reject / execute buttons stay disabled until the backend lands." showRiskLink={false} />}
         {mod.state === 'forbidden' && <p className="alert-error" role="alert">Gated: super_admin role required.</p>}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}
         {mod.state === 'live' && rows.length === 0 && <Empty title={`No ${kind} awaiting review.`} />}

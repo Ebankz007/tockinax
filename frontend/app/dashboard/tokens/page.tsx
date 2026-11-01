@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import Countdown from '@/components/Countdown';
 import { api, errMsg, fetchModule, listOf, num, ApiError, type Holding, type ModuleState } from '@/lib/api';
@@ -20,7 +19,7 @@ function Portfolio({ reloadKey }: { reloadKey: number }) {
 
   if (mod.state === 'loading') return <p role="status">Loading holdings…</p>;
   if (mod.state === 'deploying')
-    return <ModuleEmpty title="Holdings module deploying." hint="Your portfolio will appear here once the tokens backend deploys. SIMULATED pilot — no real funds." />;
+    return <ModuleEmpty title="Holdings module deploying." hint="Your portfolio will appear here once the tokens backend deploys." />;
   if (mod.state === 'forbidden') return <p className="alert-error" role="alert">Gated: please log in again.</p>;
   if (mod.state === 'error') return <p className="alert-error" role="alert">{mod.message}</p>;
   const rows = listOf<Holding>(mod.data);
@@ -96,12 +95,12 @@ function BuyLock({ onDone }: { onDone: () => void }) {
   return (
     <form className="card-raised space-y-3" onSubmit={submit} aria-label="Buy and lock form">
       <h2 className="font-display font-semibold text-white">
-        Buy &amp; lock <SimBadge />
+        Buy &amp; lock
       </h2>
       {ok && <p className="alert-ok" role="status">{ok}</p>}
       {error && <p className="alert-error" role="alert">{error}</p>}
       {deploying && (
-        <ModuleEmpty title="Purchase module deploying." hint="Your order was not placed — the tokens backend is not reachable yet. Nothing moved. SIMULATED pilot — no real funds." />
+        <ModuleEmpty title="Purchase module deploying." hint="Your order was not placed — the tokens backend is not reachable yet. Nothing moved." />
       )}
       <div>
         <label className="label" htmlFor="buy-amount">Amount (pilot units)</label>
@@ -119,15 +118,12 @@ function BuyLock({ onDone }: { onDone: () => void }) {
         </div>
       </fieldset>
       <p className="alert-warn" role="note">
-        Target preview: <strong>{target || '—'}</strong>{' '}
-        <span className="badge-sim">TARGET</span> — Target prices are not guaranteed — sale
-        requires a willing buyer; unsold stays unsold.
+        Target preview: <strong>{target || '—'}</strong> — Target prices are not guaranteed — sale requires a willing buyer; unsold stays unsold.
       </p>
       <div className="flex items-start gap-2 text-sm">
         <input id="buy-risk" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4 accent-[#F0B90B]" required />
         <label htmlFor="buy-risk" className="text-mist">
-          I understand this is a <span className="text-white">SIMULATED pilot — no real funds</span>, and I have
-          read the <Link href="/risk" className="text-gold underline">risk disclosure</Link>.
+          I understand this is not live yet, and I have read the <Link href="/risk" className="text-gold underline">risk disclosure</Link>.
         </label>
       </div>
       <button className="btn-primary w-full" disabled={busy || !agreed}>
@@ -143,7 +139,7 @@ function TokensInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        Tokens &amp; portfolio <SimBadge />
+        Tokens &amp; portfolio
       </h1>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card space-y-2">

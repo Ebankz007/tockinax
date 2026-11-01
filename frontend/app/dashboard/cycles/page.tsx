@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
-import { SimBadge } from '@/components/Badges';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, num, type CycleInfo, type ModuleState } from '@/lib/api';
 
@@ -42,7 +41,7 @@ function CyclesInner() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
-        My cycles <SimBadge />
+        My cycles
       </h1>
       <div className="card space-y-3">
         <p className="text-sm text-mist">

@@ -80,7 +80,7 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('MEMO:member_volume_USD','MEMO','USD','Member-to-member volume record (not company money)'),
     ('MEMO:member_volume_NGN','MEMO','NGN','Member-to-member volume record (not company money)'),
     ('OPS:reward_funding','ASSET','USD','Documented company reward funding pool'),
-    ('LIAB:sim_usdt','LIABILITY','USDT','Member SIM-USDT liability (simulated pilot balances)'),
+    ('LIAB:sim_usdt','LIABILITY','USDT','Member balance liability (pre-live balances)'),
     ('SIM:usdt_clearing','ASSET','USDT','Simulated USDT clearing account for token-marketplace settlement'),
     ('REV:insurance_premiums','REVENUE','USDT','Insurance premium revenue'),
     ('REV:insurance_reserve','REVENUE','USDT','Insurance claim reserve'),
@@ -89,7 +89,7 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
 
   // ---- Token-marketplace pilot seeds (all DISABLED-by-default where financial) ----
   await pool.query(`insert into token_definitions (code, name, kind, total_supply, basis, rights, active) values
-    ('TKX-SIM','TKX Simulated Token (SIMULATED — clearly labelled)','SIMULATED',10000000,'1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled','none — simulated participation record', true)
+    ('TKX','TKX Token (standard)','STANDARD',10000000,'1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled','none — participation record', true)
     on conflict (code) do update set name=excluded.name, basis=excluded.basis, rights=excluded.rights`);
   // Pricing v1: 100 bps/day simple => 700 bps term for 7d, 1400 bps term for 14d.
   await pool.query(`insert into pricing_rules (version, lock_days, rate_bps_per_day, basis, active) values

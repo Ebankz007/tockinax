@@ -1,4 +1,4 @@
-// Token pilot routes — SIMULATED tokens only. Auth required, RBAC+Zod server-side.
+// Token routes — Auth required, RBAC+Zod server-side.
 // Safeguards: Decimal only; ledger balanced+idempotent; rewards/commissions disabled
 // until approved+funded (never paid here); evidence never completes orders (N/A here).
 const express = require('express');
