@@ -16,6 +16,7 @@ function DepositsInner() {
   const [reloadKey, setReloadKey] = useState(0);
   const [amount, setAmount] = useState('50');
   const [address, setAddress] = useState('');
+  const [network, setNetwork] = useState<'TRC20' | 'BEP20'>('TRC20');
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState('');
   const [error, setError] = useState('');
@@ -36,7 +37,7 @@ function DepositsInner() {
       const d = await api.post<DepositIntent>('/deposits/intents', {
         amount: num(amount),
         currency: 'USDT',
-        network: 'TRC20',
+        network: network,
       });
       setIntent(d);
       setOk(`Intent created: send ${amount} USDT (TRC20) in the sandbox to complete.`);
@@ -88,11 +89,14 @@ function DepositsInner() {
           </div>
           <div>
             <label className="label" htmlFor="dep-net">Network</label>
-            <input id="dep-net" className="input" value="TRC20 (only)" disabled aria-label="Network: TRC20 only" />
+            <select id="dep-net" className="input" onChange={(e) => setNetwork(e.target.value)} required>
+              <option value="TRC20">TRC20 (USDTR)</option>
+              <option value="BEP20">BEP20 (USDTB)</option>
+            </select>
           </div>
           <div>
-            <label className="label" htmlFor="dep-addr">Your TRC20 address (for reference only)</label>
-            <input id="dep-addr" className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="T…" autoComplete="off" />
+            <label className="label" htmlFor="dep-addr">Your {network} address (for reference only)</label>
+            <input id="dep-addr" className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={"T..."} autoComplete="off" />
             <p className="hint">Public address only. Never enter private keys or seed phrases anywhere.</p>
           </div>
           <button className="btn-primary w-full" disabled={busy}>{busy ? 'Creating…' : 'Create sandbox intent'}</button>

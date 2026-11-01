@@ -15,6 +15,7 @@ function RegisterForm() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showRegPass, setShowRegPass] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +53,26 @@ function RegisterForm() {
       </div>
       <div>
         <label className="label" htmlFor="reg-pass">Password (min 10 characters)</label>
-        <input id="reg-pass" className="input" type="password" required minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <div className="relative">
+          <input id="reg-pass" className="input" type={showRegPass ? 'text' : 'password'} required minLength={10} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-bright focus:outline-none focus:ring-2 focus:ring-bright focus:ring-offset-2"
+            onClick={() => setShowRegPass(!showRegPass)}
+            aria-label={showRegPass ? 'Hide password' : 'Show password'}
+          >
+            <svg
+              className="width-5 height-5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M1 12s4-8 12-8 12 8 12 8-4 8-12 8-12-8-12-8Z"
+              />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div>
         <label className="label" htmlFor="reg-ref">Referral code (required)</label>

@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [mfaUser, setMfaUser] = useState<{ userId: string; email: string; challenge: string } | null>(null);
+  const [showLoginPass, setShowLoginPass] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,7 +59,26 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="label" htmlFor="login-pass">Password</label>
-              <input id="login-pass" className="input" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <div className="relative">
+                <input id="login-pass" className="input" type={showLoginPass ? 'text' : 'password'} required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-bright focus:outline-none focus:ring-2 focus:ring-bright focus:ring-offset-2"
+                  onClick={() => setShowLoginPass(!showLoginPass)}
+                  aria-label={showLoginPass ? 'Hide password' : 'Show password'}
+                >
+                  <svg
+                    className="width-5 height-5"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M1 12s4-8 12-8 12 8 12 8-4 8-12 8-12-8-12-8Z"
+                    />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </>
         )}

@@ -16,6 +16,7 @@ function WithdrawalsInner() {
   const [reloadKey, setReloadKey] = useState(0);
   const [amount, setAmount] = useState('20');
   const [address, setAddress] = useState('');
+  const [wdNetwork, setWDNetwork] = useState<'TRC20' | 'BEP20'>('TRC20');
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState('');
   const [error, setError] = useState('');
@@ -36,7 +37,7 @@ function WithdrawalsInner() {
       return;
     }
     try {
-      await api.post('/withdrawals/request', { amount: num(amount), currency: 'USDT', network: 'TRC20', address: address.trim() });
+      await api.post('/withdrawals/request', { amount: num(amount), currency: 'USDT', network: wdNetwork, address: address.trim() });
       setOk('Withdrawal requested. It will show in history after review.');
       setReloadKey((k) => k + 1);
     } catch (err) {
@@ -68,8 +69,15 @@ function WithdrawalsInner() {
             <input id="wd-amount" className="input" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <div>
-            <label className="label" htmlFor="wd-addr">Destination TRC20 address</label>
-            <input id="wd-addr" className="input font-mono" required value={address} onChange={(e) => setAddress(e.target.value)} placeholder="T…" autoComplete="off" />
+            <label className="label" htmlFor="wd-net">Network</label>
+            <select id="wd-net" className="input" onChange={(e) => setWDNetwork(e.target.value)} required>
+              <option value="TRC20">TRC20</option>
+              <option value="BEP20">BEP20</option>
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="wd-addr">Destination {wdNetwork} address</label>
+            <input id="wd-addr" className="input font-mono" required value={address} onChange={(e) => setAddress(e.target.value)} placeholder={"T..."} autoComplete="off" />
             <p className="hint">Public address only. This form has no private-key field — never paste one.</p>
           </div>
           <button className="btn-primary w-full" disabled={busy}>{busy ? 'Submitting…' : 'Request withdrawal'}</button>

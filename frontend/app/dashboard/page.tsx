@@ -120,6 +120,7 @@ function DashboardInner() {
         <Link href="/dashboard/marketplace" className="btn-secondary">My marketplace</Link>
         <Link href="/dashboard/referrals" className="btn-secondary">Referrals</Link>
         <Link href="/dashboard/payouts" className="btn-secondary">Payouts</Link>
+        <Link href="/dashboard/wallet" className="btn-secondary">Wallet</Link>
         <Link href="/dashboard/support" className="btn-secondary">Support</Link>
       </nav>
       <RiskStrip compact />
