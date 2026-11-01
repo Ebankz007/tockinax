@@ -123,6 +123,7 @@ function DashboardInner() {
         <Link href="/dashboard/wallet" className="btn-secondary">Wallet</Link>
         <Link href="/dashboard/support" className="btn-secondary">Support</Link>
         <Link href="/change-password" className="btn-secondary">Change password</Link>
+        <Link href="/forgot-password" className="btn-secondary">Forgot password</Link>
         <button
           onClick={() => void window.location.href = '/api/v1/auth/logout'}
           className="btn-danger text-sm"
