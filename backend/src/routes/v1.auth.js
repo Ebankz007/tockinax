@@ -106,8 +106,9 @@ router.post('/verify-email', async (req, res, next) => {
 // POST /api/v1/auth/login
 router.post('/login', async (req, res, next) => {
   try {
-    console.log('LOGIN DEBUG: req.body =', JSON.stringify(req.body), 'type =', typeof req.body, 'headers content-type =', req.headers['content-type']);
-    const { email, password } = z.object({ email: z.string().email(), password: z.string().min(1) }).parse(req.body);
+    console.log('LOGIN DEBUG: req.body =', JSON.stringify(req.body), 'type =', typeof req.body);
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'missing_fields' });
     const pool = getPool();
     const r = await pool.query(`select * from users where lower(email)=$1`, [email.toLowerCase()]);
     if (!r.rowCount) return res.status(401).json({ error: 'invalid_credentials' });
