@@ -213,7 +213,7 @@ router.post('/2fa/verify', authRequired, async (req, res, next) => {
     });
     if (!verified) return res.status(400).json({ error: 'invalid_code' });
     await pool.query(`update users set mfa_enabled=true where id=$1`, [req.user.id]);
-    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.enable','user',$2,{},$3)`,
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.enable','user',$2,'{}',$3)`,
       [req.user.id, req.user.id, req.ip]);
     res.json({ ok: true, mfa_enabled: true });
   } catch (e) { next(e); }
@@ -233,7 +233,7 @@ router.post('/2fa/disable', authRequired, async (req, res, next) => {
     });
     if (!verified) return res.status(400).json({ error: 'invalid_code' });
     await pool.query(`update users set mfa_enabled=false, mfa_secret=null where id=$1`, [req.user.id]);
-    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.disable','user',$2,{},$3)`,
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'2fa.disable','user',$2,'{}',$3)`,
       [req.user.id, req.user.id, req.ip]);
     res.json({ ok: true, mfa_enabled: false });
   } catch (e) { next(e); }
@@ -299,7 +299,7 @@ router.post('/change-password', authRequired, async (req, res, next) => {
     const hash = await bcrypt.hash(b.new_password, 12);
     await pool.query(`update users set password_hash=$1 where id=$2`, [hash, req.user.id]);
 
-    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'auth.change_password','user',$2,{},$3)`,
+    await pool.query(`insert into audit_logs (actor_id, action, target_type, target_id, diff, ip) values ($1,'auth.change_password','user',$2,'{}',$3)`,
       [req.user.id, req.user.id, req.ip]);
 
     res.json({ ok: true, message: 'Password changed successfully' });
