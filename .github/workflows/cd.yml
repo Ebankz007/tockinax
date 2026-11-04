@@ -46,7 +46,7 @@ jobs:
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve image tag
         id: meta
@@ -97,7 +97,7 @@ jobs:
     environment: production
     if: vars.DEPLOY_ENABLED == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Ship compose file to host
         env:
