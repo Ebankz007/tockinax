@@ -6,14 +6,14 @@
 #   runtime stage copies the root node_modules, not a nested frontend one.
 # - There is no next.config.* in this project; never COPY a glob that may not
 #   match - a zero-match COPY is a hard build failure.
-FROM node:20-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
 RUN npm ci --workspace=frontend
 
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
@@ -22,7 +22,7 @@ WORKDIR /app/frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
