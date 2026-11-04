@@ -1,6 +1,6 @@
 # TOCKINAX backend — production image (npm workspaces: single root lockfile).
 # Build from repo root: docker build -f backend/Dockerfile .
-FROM node:20-alpine AS base
+FROM node:25-alpine AS base
 WORKDIR /app
 
 # Workspace manifests first (root lock covers backend+frontend)
