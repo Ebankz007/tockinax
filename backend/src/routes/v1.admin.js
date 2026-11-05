@@ -37,7 +37,7 @@ router.get('/overview', async (_req, res, next) => {
 // Get listings pending review for moderation queue
 router.get('/listings', async (req, res, next) => {
   try {
-    const status = req.query.status as string | undefined;
+    const status = req.query.status;
     let query = `select l.*, u.email as seller_email from listings l join users u on u.id=l.seller_id where l.status = 'pending_review'`;
     const r = await pool.query(query);
     res.json({ items: r.rows });
@@ -47,7 +47,7 @@ router.get('/listings', async (req, res, next) => {
 // Get orders awaiting confirmation for moderation queue
 router.get('/orders', async (req, res, next) => {
   try {
-    const status = req.query.status as string | undefined;
+    const status = req.query.status;
     let query = `select o.*, u.email as member_email from orders o join users u on u.id=o.member_id where o.status = 'evidence_submitted'`;
     const r = await pool.query(query);
     res.json({ items: r.rows });
