@@ -45,7 +45,7 @@ function AdminInner() {
   }, []);
 
   if (loading) {
-  return <p role="status">Loading admin overview…</p>
+    return <p role="status">Loading admin overview…</p>
 }
   if (forbidden)
     return (

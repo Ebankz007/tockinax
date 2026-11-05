@@ -45,7 +45,7 @@ function DashboardInner() {
   }, []);
 
   if (loading) {
-  return <p role="status">Loading dashboard…</p>
+    return <p role="status">Loading dashboard…</p>
 }
 
   return (
