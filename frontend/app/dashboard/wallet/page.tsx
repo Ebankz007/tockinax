@@ -42,7 +42,7 @@ function WalletInner() {
   };
 
   async function clearWallet(network: 'TRC20' | 'BEP20') {
-    if (!window.confirm(`Clear your ${network} address?`)) return;
+    if (!window.confirm(`Clear your ${network} address?`)) return undefined;
     setBusy(true); setError(''); setMsg('');
     try {
       const p = await api.put('/user/profile', {
