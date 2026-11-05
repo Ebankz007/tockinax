@@ -89,7 +89,7 @@ function DepositsInner() {
           </div>
           <div>
             <label className="label" htmlFor="dep-net">Network</label>
-            <select id="dep-net" className="input" onChange={(e) => setNetwork(e.target.value)} required>
+            <select id="dep-net" className="input" onChange={(e) => setNetwork(e.target.value as "TRC20" | "BEP20")} required>
               <option value="TRC20">TRC20 (USDTR)</option>
               <option value="BEP20">BEP20 (USDTB)</option>
             </select>

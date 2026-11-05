@@ -70,7 +70,7 @@ function WithdrawalsInner() {
           </div>
           <div>
             <label className="label" htmlFor="wd-net">Network</label>
-            <select id="wd-net" className="input" onChange={(e) => setWDNetwork(e.target.value)} required>
+            <select id="wd-net" className="input" onChange={(e) => setWDNetwork(e.target.value as "TRC20" | "BEP20")} required>
               <option value="TRC20">TRC20</option>
               <option value="BEP20">BEP20</option>
             </select>
