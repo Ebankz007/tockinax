@@ -37,7 +37,7 @@ function WalletInner() {
       setProfile(p.profile || profile);
       setMsg(`${network} address saved.`);
       setEditing(null);
-    } catch (e) { setError(errMsg(e)); } finally { setBusy(false); }
+    } catch (e) { setError(errMsg(e)); } finally { setBusy(false); };
   }
 
   async function clearWallet(network: 'TRC20' | 'BEP20') {
@@ -51,7 +51,7 @@ function WalletInner() {
       setProfile(p.profile || profile);
       setMsg(`${network} address cleared.`);
       setEditing(null);
-    } catch (e) { setError(errMsg(e)); } finally { setBusy(false); }
+    } catch (e) { setError(errMsg(e)); } finally { setBusy(false); };
   }
 
   return (
