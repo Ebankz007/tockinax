@@ -44,7 +44,9 @@ function AdminInner() {
     })();
   }, []);
 
-  if (loading) return <p role="status">Loading admin overview…</p>
+  if (loading) {
+  return <p role="status">Loading admin overview…</p>
+}
   if (forbidden)
     return (
       <div className="card space-y-2">

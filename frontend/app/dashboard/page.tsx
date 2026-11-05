@@ -44,7 +44,9 @@ function DashboardInner() {
     })();
   }, []);
 
-  if (loading) return <p role="status">Loading dashboard…</p>
+  if (loading) {
+  return <p role="status">Loading dashboard…</p>
+}
 
   return (
     <div className="space-y-4">
