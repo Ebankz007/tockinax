@@ -16,6 +16,7 @@ function WalletInner() {
   const [newAddress, setNewAddress] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     async function load() {
