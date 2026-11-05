@@ -27,6 +27,10 @@ function AdminInner() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const handleLogout = () => {
+    window.location.href = "/api/v1/auth/logout";
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -86,7 +90,7 @@ function AdminInner() {
       <Link href="/admin/roles" className="btn-secondary">Roles & permissions</Link>
       <Link href="/change-password" className="btn-secondary">Change password</Link>
       <Link href="/forgot-password" className="btn-secondary">Forgot password</Link>
-      <button onClick={() => void window.location.href = "/api/v1/auth/logout"} className="btn-danger text-sm" aria-label="Logout">Logout</button>
+      <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>
     </nav>
   </div>;
 }
