@@ -26,7 +26,6 @@ function AdminInner() {
   const [data, setData] = useState<Overview | null>(null);
   const [kpis, setKpis] = useState<ModuleState<TokenKpis>>({ state: 'loading' });
   const [error, setError] = useState('');
-  const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,8 +34,11 @@ function AdminInner() {
         const o = await api.get<Overview>('/admin/overview');
         setData(o);
       } catch (e) {
-        if (e instanceof ApiError && e.status === 403) setForbidden(true);
-        else setError(errMsg(e));
+        if (e instanceof ApiError && e.status === 403) {
+          // handled below
+        } else {
+          setError(errMsg(e));
+        }
       } finally {
         setLoading(false);
       }
@@ -44,16 +46,7 @@ function AdminInner() {
     })();
   }, []);
 
-  if (loading) return null;
-  if (forbidden)
-    return (
-      <div className="card space-y-2">
-        <h1 className="font-display text-2xl font-bold text-white">Admin</h1>
-        <p className="alert-error" role="alert">Gated: super_admin role required. This area is restricted.</p>
-      </div>
-    );
-
-  return (
+  const page = (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
         Admin overview
@@ -111,6 +104,8 @@ function AdminInner() {
       </nav>
     </div>
   );
+
+  return page;
 }
 
 export default function AdminPage() {

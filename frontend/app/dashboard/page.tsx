@@ -44,9 +44,7 @@ function DashboardInner() {
     })();
   }, []);
 
-  if (loading) return null;
-
-  return (
+  const page = (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
         Dashboard
@@ -87,7 +85,7 @@ function DashboardInner() {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card">
-          <h2 className="font-semibold text-white">Referral snapshot</h2>
+          <h2 className="font-display font-semibold text-white">Referral snapshot</h2>
           {!ref ? <Empty title="Referral data unavailable." hint="Login may have expired or the endpoint is down." /> : (
             <>
               <p className="mt-1 break-all text-sm">Code: <strong>{ref.referralCode}</strong></p>
@@ -97,7 +95,7 @@ function DashboardInner() {
           )}
         </div>
         <div className="card">
-          <h2 className="font-semibold text-white">Notifications</h2>
+          <h2 className="font-display font-semibold text-white">Notifications</h2>
           {notes === null ? <Empty title="No notification feed." hint="The notifications endpoint is not available yet." /> :
             notes.length === 0 ? <Empty title="No notifications." /> : (
             <ul className="mt-2 space-y-1 text-sm">
@@ -135,6 +133,8 @@ function DashboardInner() {
       <RiskStrip compact />
     </div>
   );
+
+  return page;
 }
 
 export default function DashboardPage() {
