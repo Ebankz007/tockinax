@@ -38,7 +38,7 @@ function WalletInner() {
       setMsg(`${network} address saved.`);
       setEditing(null);
     } catch (e) { setError(errMsg(e)); } finally { setBusy(false); };
-  }
+  };
 
   async function clearWallet(network: 'TRC20' | 'BEP20') {
     if (!window.confirm(`Clear your ${network} address?`)) return;
@@ -52,7 +52,7 @@ function WalletInner() {
       setMsg(`${network} address cleared.`);
       setEditing(null);
     } catch (e) { setError(errMsg(e)); } finally { setBusy(false); };
-  }
+  };
 
   return (
     <div className="space-y-4">
