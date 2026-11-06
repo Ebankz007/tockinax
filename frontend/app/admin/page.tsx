@@ -27,8 +27,13 @@ function AdminInner() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
-    window.location.href = "/api/v1/auth/logout";
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/v1/auth/logout", { method: "POST" });
+    } catch (e) {
+      // ignore fetch errors - still redirect
+    }
+    window.location.href = "/login";
   };
 
   useEffect(() => {
