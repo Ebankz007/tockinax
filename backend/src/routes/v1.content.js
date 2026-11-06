@@ -32,7 +32,7 @@ router.get('/settings/public', async (req, res, next) => {
     } catch { /* tables may be unseeded — fall back to defaults */ }
     res.json({
       platformName: (settings.branding && settings.branding.platformName) || 'TOCKINAX',
-      company: (settings.branding && settings.branding.company) || 'MMITPS INC',
+      company: (settings.branding && settings.branding.company) || 'TOCKINAX',
       domain: (settings.branding && settings.branding.domain) || null,
       allowedCurrencies: ALLOWED_CURRENCIES,
       fees: settings.fees || { registration: null, seller_activation: null, marketplace: null, note: 'see /api/v1/marketplace/fees' },

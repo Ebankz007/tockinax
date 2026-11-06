@@ -149,7 +149,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             <p className="mt-6 text-xs text-mist">
-              © {new Date().getFullYear()} TOCKINAX · MMITPS INC. All rights reserved.
+              © {new Date().getFullYear()} TOCKINAX · All rights reserved.
             </p>
           </div>
         </footer>

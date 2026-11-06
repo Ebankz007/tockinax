@@ -1,6 +1,6 @@
 # TOCKINAX — Implementation Plan (Phases 1-7)
 
-Defaults (configurable, not hardcoded law): platform=`tockinax`, company=`MMITPS INC`, domain=`TBD`.
+Defaults (configurable, not hardcoded law): platform=`tockinax`, company=`TOCKINAX`, domain=`TBD`.
 Stack: Express+Drizzle+Postgres+Redis+Next.js (see ARCHITECTURE.md §1 for divergence rationale).
 
 ## Phase 1 — Inspect & Plan [DONE]

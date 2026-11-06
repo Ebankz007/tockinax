@@ -1,14 +1,14 @@
 # TOCKINAX — Architecture Document v1.0
 
 **Project:** TOCKINAX — Gated P2P Community Marketplace + Referral + Rewards
-**Company:** MMITPS INC (configurable via `system_settings`)
+**Company:** TOCKINAX (configurable via `system_settings`)
 **Domain:** TBD (configurable, defaults to `localhost`)
 **Date:** 2026-10-13
 **Author:** Kairos (Senior Architect / PM / Security)
 
 ## 1. Inspection Summary (Phase 1 findings)
 
-### Root workspace `C:\BerfamWorks\MMITPS INC`
+### Root workspace `C:\BerfamWorks\TOCKINAX`
 - `production/` — Legacy MERN stack (Express + **MongoDB/Mongoose** + Next.js + Python AI services). 200+ backend files, MLM TreeNode/Commission, Wallet/Transaction, KYC, subscriptions. Mongo-based → **unsuitable as ledger foundation** (no double-entry, no SERIALIZABLE guarantees). Reuse patterns only (RBAC middleware, rate-limit, Paystack/Flutterwave webhook verification ideas), not data layer.
 - `mmitps/` — Current stack: **Express 4 + Drizzle ORM + PostgreSQL + Redis + Next.js**, JWT (access+refresh), Paystack/Flutterwave/Korapay keys, ENCRYPTION_KEY for PII. This is the team's proven operational pattern.
 - `AmplifiedTraders/` — docs-only. No code to reuse.
@@ -108,7 +108,7 @@ bcrypt (12) + pepper, email verify (signed 24h token), reset (single-use, hashed
 `/healthz`, `/readyz`, structured JSON logs (pino), OpenTelemetry hook, admin Ops dashboard (reconciliation exceptions, queue depth, payout latency). Docker: `backend`, `frontend`, `postgres`, `redis` services; env-only secrets; CI runs migrate + test + build.
 
 ## 9. Blockers / Placeholders (no invented financial rules)
-- Platform name/company/domain → `system_settings` (defaults: TOCKINAX / MMITPS INC / TBD).
+- Platform name/company/domain → `system_settings` (defaults: TOCKINAX / TOCKINAX / TBD).
 - Registration/service fee amounts → `service_fees` table, default 0 (free) until admin sets + refund policy.
 - Paystack/Flutterwave live keys, USDT network approval, SMS provider → disabled interfaces with `.env.example` placeholders.
 - Legal sign-off gate: `feature_flags.live_payments=false` blocks real-money activation; admin checklist in `/docs/COMPLIANCE_CHECKLIST.md`.

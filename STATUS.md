@@ -22,7 +22,7 @@
 - REMAINING: Docker daemon down (compose build not run — CI builds); 7 jest skips are live-DB placeholders covered by live-smoke; 6 external approvals (fees, provider keys, USDT network, reward funding, SMTP/S3/SMS) still BLOCKED by design.
 
 ## Blocked / needs external decision (not faked)
-- BLOCKED: platform/company/domain final values (defaults: gatedp2p / MMITPS INC / TBD)
+- BLOCKED: platform/company/domain final values (defaults: gatedp2p / TOCKINAX / TBD)
 - BLOCKED: registration fee amount/currency (default 0) — needs business + refund sign-off
 - BLOCKED: Paystack/Flutterwave/Korapay live keys + webhook secrets — integrations stub-only
 - BLOCKED: USDT network (BEP20/TRC20) + legal approval — crypto stays 403
