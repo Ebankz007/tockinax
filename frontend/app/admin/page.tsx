@@ -52,7 +52,7 @@ function AdminInner() {
     })();
   }, []);
 
-  return <div className="space-y-4">
+  const pageContent = <div className="space-y-4">
     <h1 className="font-display text-2xl font-bold text-white">Admin overview</h1>
     {error && <p className="alert-error" role="alert">{error}</p>}
     {data && (
@@ -98,6 +98,7 @@ function AdminInner() {
       <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>
     </nav>
   </div>;
+  return pageContent;
 }
 
 function AdminPage() {

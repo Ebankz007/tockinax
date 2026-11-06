@@ -53,7 +53,7 @@ function DashboardInner() {
     })();
   }, []);
 
-  return <div className="space-y-4">
+  const pageContent = <div className="space-y-4">
     <h1 className="font-display text-2xl font-bold text-white">Dashboard</h1>
     {error && <p className="alert-error" role="alert">{error}</p>}
     {me && (
@@ -132,6 +132,7 @@ function DashboardInner() {
     </nav>
     <RiskStrip compact />
   </div>;
+  return pageContent;
 }
 
 function DashboardPage() {
