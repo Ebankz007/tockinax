@@ -562,6 +562,14 @@ const insuranceClaims = pgTable('insurance_claims', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('insurance_claims_user_idx').on(t.userId), index('insurance_claims_status_idx').on(t.status)]);
 
+const passwordResets = pgTable('password_resets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('password_resets_user_idx').on(t.userId)]);
+
 module.exports = {
   users, userProfiles, roles, permissions, rolePermissions, userRoles, userSessions,
   identityChecks, consentRecords, serviceFees, servicePayments,
@@ -577,4 +585,5 @@ module.exports = {
   stageDefinitions, stageHistory, stageRequests, tokenListings, tokenFills,
   commissionCategories,
   insurancePolicies, insuranceClaims,
+  passwordResets,
 };

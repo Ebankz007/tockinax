@@ -283,8 +283,25 @@ router.post('/2fa/validate', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /auth/forgot-password — send password reset link (always returns 200 to prevent email enumeration)
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const b = z.object({ email: z.string().email() }).parse(req.body);
+    const pool = getPool();
+    const u = await pool.query(`select id, email from users where lower(email)=$1`, [b.email.toLowerCase()]);
+    if (u.rowCount) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const resetHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await pool.query(`insert into password_resets (user_id, token_hash, expires_at) values ($1,$2,$3) on conflict (user_id) do update set token_hash=$2, expires_at=$3`, [u.rows[0].id, resetHash, expiresAt]);
+      console.log(`[password reset] ${b.email}: token=${resetToken.slice(0, 8)}… (dev log only)`);
+    }
+    // Always return success to prevent email enumeration
+    res.json({ ok: true, message: 'If an account exists with this email, a reset link has been sent.' });
+  } catch (e) { next(e); }
+});
+
 // POST /auth/change-password — require current password, set a new one
-router.post('/change-password', authRequired, async (req, res, next) => {
   try {
     const b = z.object({
       current_password: z.string().min(1),
