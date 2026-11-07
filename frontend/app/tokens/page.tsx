@@ -21,7 +21,7 @@ function TokenCalculator() {
   const fmt = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
-    <section className="rounded-lg border border-line/10 bg-coal p-4 space-y-3" aria-label="Target calculator (simulation)">
+    <section className="rounded-lg border border-line/10 bg-coal p-4 space-y-3" aria-label="Target calculator">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-display font-semibold text-white">Target calculator</h2>
       </div>
@@ -85,7 +85,7 @@ function TokenCalculator() {
         </div>
       </dl>
       <p className="text-xs text-mist">
-        Simulation — targets, not guarantees. {days}-day math: resale = amount × {days === 7 ? '1.07' : '1.14'} at
+        Illustration — targets, not guarantees. {days}-day math: resale = amount × {days === 7 ? '1.07' : '1.14'} at
         maturity. Automatic listing is not automatic sale; unsold stays unsold.
       </p>
     </section>

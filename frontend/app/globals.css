@@ -80,9 +80,6 @@ summary:focus-visible {
 .badge-warn {
   @apply badge bg-brand-500/15 text-brand-300;
 }
-.badge-sim {
-  @apply badge bg-brand-500/15 text-gold border border-gold/40;
-}
 .badge-info {
   @apply badge bg-sky-500/15 text-sky-300;
 }

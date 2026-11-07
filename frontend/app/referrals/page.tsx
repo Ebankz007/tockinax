@@ -83,7 +83,7 @@ export default function ReferralsPage() {
         <h2 className="font-display font-semibold text-white">Anti-fraud rules</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-mist">
           <li>No self-referral: you cannot earn on your own purchases.</li>
-          <li>No duplicate or fake accounts to simulate a network.</li>
+          <li>No duplicate or fake accounts to inflate a network.</li>
           <li>Commissions require a completed, confirmed sale plus approval.</li>
           <li>Disputed or reversed sales void the related commission.</li>
           <li>Abuse leads to suspension and forfeiture of pending commissions.</li>
