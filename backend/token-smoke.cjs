@@ -36,6 +36,8 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
   const buyer = await reg(`tkx-buyer${ts}@test.com`);
   const seller = await reg(`tkx-seller${ts}@test.com`);
   ok('register+login buyer+seller', !!buyer.token && !!seller.token, '');
+  // Account-level insurance is a precondition for token purchases.
+  await pool.query(`update users set insurance_active=true, insurance_activated_at=now() where id=$1`, [seller.id]);
 
   // member_no + compat definitions/categories
   let r = await request(app).get('/api/v1/tokens/definitions').set('Authorization', 'Bearer ' + buyer.token);
@@ -65,6 +67,15 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
   ok('purchase 201 (frontend fields, within stage-1 max)', r.status === 201 && r.body.pricing, `-> ${r.status} target=${r.body.pricing && r.body.pricing.total}`);
   ok('target = 570 simple', r.body.pricing && Number(r.body.pricing.total) === 570, `total=${r.body.pricing && r.body.pricing.total}`);
   const holdingId = r.body.holding.id;
+  ok('purchase queued for admin approval', r.body.holding && r.body.holding.status === 'pending_approval', `status=${r.body.holding && r.body.holding.status}`);
+
+  // Manual admin approval step: activate the holding and open its cycle.
+  await pool.query(`update token_holdings set status='locked' where id=$1`, [holdingId]);
+  await pool.query(
+    `insert into participation_cycles (user_id, holding_id, started_at, status, success)
+     values ($1,$2,now(),'started',false)`,
+    [seller.id, holdingId]
+  );
 
   // force maturity (dev-only) + run maturity job
   await pool.query(`update token_holdings set matures_at = now() - interval '1 minute' where id=$1`, [holdingId]);

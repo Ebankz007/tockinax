@@ -42,6 +42,8 @@ const H = (t) => ({ Authorization: 'Bearer ' + t });
   await pool.query(`insert into user_roles (user_id, role_id) values ($1,$2) on conflict do nothing`, [aid, rl.rows[0].id]);
   const al = await request(app).post('/api/v1/auth/login').send({ email: `cov-a${ts}@test.com`, password: 'SuperSecure123!' });
   const A = H(al.body.access), M = H(m.token);
+  // Account-level insurance is a precondition for token purchases.
+  await pool.query(`update users set insurance_active=true, insurance_activated_at=now() where id=$1`, [m.id]);
   ok('member+admin auth', !!m.token && !!al.body.access, '');
 
   const get = async (url, hdr, expect = 200) => {
@@ -89,6 +91,13 @@ const H = (t) => ({ Authorization: 'Bearer ' + t });
   await post(`/api/v1/deposits/${di}/simulate-pay`, M, {}, 200);
   r = await post('/api/v1/tokens/purchase', M, { amount: '500.0000', cycle_days: 7, agreed_risk: true }, 201);
   const hid = r.body.holding.id;
+  // Manual admin approval step: activate the holding and open its cycle.
+  await pool.query(`update token_holdings set status='locked' where id=$1`, [hid]);
+  await pool.query(
+    `insert into participation_cycles (user_id, holding_id, started_at, status, success)
+     values ($1,$2,now(),'started',false)`,
+    [m.id, hid]
+  );
   await pool.query(`update token_holdings set matures_at = now() - interval '1 minute' where id=$1`, [hid]);
   const { matureDue } = require('./src/lib/maturity');
   await matureDue();

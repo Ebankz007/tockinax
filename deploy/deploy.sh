@@ -168,6 +168,9 @@ if [ -f "$FAILMARK" ] && [ "$(cat "$FAILMARK")" = "$REMOTE" ]; then
 fi
 
 # ---- CI gate ---------------------------------------------------------------
+# The live deploy is pm2-based, so it needs the unit, integration and frontend
+# build jobs green. The `docker images` job only publishes container images and
+# must not block a pm2 deploy.
 STATUS_JSON="$(curl -sf --max-time 20 \
   "https://api.github.com/repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${REMOTE}&per_page=1" \
   || echo '')"
@@ -177,10 +180,37 @@ if [ -z "$STATUS_JSON" ]; then
   exit 0
 fi
 
+RUN_ID="$(printf '%s' "$STATUS_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);r=d.get("workflow_runs") or [];print(r[0]["id"] if r else "")' 2>/dev/null || echo '')"
 CONCLUSION="$(printf '%s' "$STATUS_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);r=d.get("workflow_runs") or [];print(r[0]["conclusion"] if r else "none")' 2>/dev/null || echo none)"
 
-if [ "$CONCLUSION" != "success" ]; then
-  log "CI for ${REMOTE} is '${CONCLUSION}' - not deploying yet"
+if [ -z "$RUN_ID" ]; then
+  log "no CI run found for ${REMOTE} - not deploying yet"
+  exit 0
+fi
+
+JOBS_JSON="$(curl -sf --max-time 20 \
+  "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=50" \
+  || echo '')"
+
+if [ -n "$JOBS_JSON" ]; then
+  GATE="$(printf '%s' "$JOBS_JSON" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+need = ["unit (hermetic, no DB)", "integration (postgres)", "frontend build"]
+by = {j.get("name"): j for j in (d.get("jobs") or [])}
+if all(by.get(n, {}).get("conclusion") == "success" for n in need):
+    print("success")
+elif any(by.get(n, {}).get("conclusion") in ("failure", "cancelled", "timed_out") for n in need):
+    print("failure")
+else:
+    print("pending")
+' 2>/dev/null || echo pending)"
+else
+  GATE="$CONCLUSION"
+fi
+
+if [ "$GATE" != "success" ]; then
+  log "CI gate for ${REMOTE} is '${GATE}' (run ${RUN_ID}) - not deploying yet"
   exit 0
 fi
 
