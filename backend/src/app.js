@@ -20,7 +20,7 @@ function buildApp() {
     hsts: { maxAge: 15552000, includeSubDomains: false, preload: false },
   }));
   app.use(cookieParser());
-  // app.use(express.json({ limit: '256kb' }));  // disabled for debugging
+  app.use(express.json({ limit: '256kb' }));
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   // Tight CORS: reflect ONLY allow-listed APP_URL origins (comma-separated), credentials on.
   const allowList = (process.env.APP_URL || 'http://localhost:3001').split(',').map((s) => s.trim()).filter(Boolean);

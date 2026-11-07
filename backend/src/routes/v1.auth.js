@@ -106,8 +106,7 @@ router.post('/verify-email', async (req, res, next) => {
 // POST /api/v1/auth/login
 router.post('/login', async (req, res, next) => {
   try {
-    console.log('LOGIN DEBUG: req.body =', JSON.stringify(req.body), 'type =', typeof req.body);
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'missing_fields' });
     const pool = getPool();
     const r = await pool.query(`select * from users where lower(email)=$1`, [email.toLowerCase()]);
