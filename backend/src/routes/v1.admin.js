@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { getPool } = require('../lib/db');
 const { authRequired } = require('../middleware/auth');
-const { postBalanced } = require('../lib/ledger');
+const { postBalanced, Decimal } = require('../lib/ledger');
 const router = express.Router();
 
 // Admin gate: must hold super_admin role (checked server-side)
@@ -232,6 +232,113 @@ router.post('/packages/pricing', async (req, res, next) => {
     );
     await audit(req, 'pricing.upsert', 'pricing_rule', `v${b.version}/lock${b.lock_days}`, b);
     res.status(201).json({ item: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// ---- Token purchase approvals (manual admin review) ----
+
+// GET /admin/token-purchases?status=pending_approval
+router.get('/token-purchases', async (req, res, next) => {
+  try {
+    const status = String(req.query.status || 'pending_approval');
+    const r = await getPool().query(
+      `select h.*, u.email as user_email, u.insurance_active
+       from token_holdings h join users u on u.id = h.user_id
+       where h.status = $1 order by h.purchased_at asc`,
+      [status]
+    );
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
+// POST /admin/token-purchases/:id/approve — activate a queued purchase
+router.post('/token-purchases/:id/approve', async (req, res, next) => {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const h = await client.query(`select * from token_holdings where id=$1 for update`, [req.params.id]);
+    if (!h.rowCount) { await client.query('rollback'); return res.status(404).json({ error: 'not_found' }); }
+    const holding = h.rows[0];
+    if (holding.status !== 'pending_approval') {
+      await client.query('rollback');
+      return res.status(409).json({ error: 'not_pending', status: holding.status });
+    }
+    const u = await client.query(`select insurance_active from users where id=$1`, [holding.user_id]);
+    if (!u.rowCount || !u.rows[0].insurance_active) {
+      await client.query('rollback');
+      return res.status(409).json({ error: 'insurance_not_active', message: 'Member has not activated account insurance.' });
+    }
+    const cost = new Decimal(holding.cost_usdt);
+    try {
+      await postBalanced({
+        sourceType: 'sim_purchase',
+        sourceId: holding.id,
+        currency: 'USDT',
+        memo: `approved token purchase ${holding.id} user ${holding.user_id}`,
+        idempotencyKey: `sim:purchase:${holding.id}`,
+        lines: [
+          { account: 'LIAB:sim_usdt', debit: cost.toFixed(4) },
+          { account: 'SIM:usdt_clearing', credit: cost.toFixed(4) },
+        ],
+      });
+    } catch (e) {
+      await client.query('rollback');
+      return res.status(502).json({ error: 'ledger_error', message: e.message });
+    }
+    const upd = await client.query(`update token_holdings set status='locked' where id=$1 returning *`, [holding.id]);
+    const c = await client.query(
+      `insert into participation_cycles (user_id, holding_id, started_at, status, success)
+       values ($1,$2,now(),'started',false) returning *`,
+      [holding.user_id, holding.id]
+    );
+    await client.query('commit');
+    await audit(req, 'token_purchase.approve', 'token_holding', holding.id, { user_id: holding.user_id, cost_usdt: holding.cost_usdt });
+    res.json({ holding: upd.rows[0], cycle: c.rows[0] });
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    next(e);
+  } finally { client.release(); }
+});
+
+// POST /admin/token-purchases/:id/reject — cancel a queued purchase
+router.post('/token-purchases/:id/reject', async (req, res, next) => {
+  try {
+    const reason = String((req.body && req.body.reason) || 'rejected_by_admin').slice(0, 200);
+    const r = await getPool().query(
+      `update token_holdings set status='cancelled' where id=$1 and status='pending_approval' returning *`,
+      [req.params.id]
+    );
+    if (!r.rowCount) return res.status(409).json({ error: 'not_pending_or_missing' });
+    await audit(req, 'token_purchase.reject', 'token_holding', req.params.id, { reason });
+    res.json({ holding: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// GET /admin/insurance-members — accounts with insurance activated
+router.get('/insurance-members', async (_req, res, next) => {
+  try {
+    const r = await getPool().query(
+      `select id, email, insurance_active, insurance_activated_at, created_at
+       from users where insurance_active = true order by insurance_activated_at desc nulls last`
+    );
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
+// POST /admin/users/:id/insurance — grant or revoke account insurance
+router.post('/users/:id/insurance', async (req, res, next) => {
+  try {
+    const active = !!(req.body && req.body.active);
+    const r = await getPool().query(
+      `update users set insurance_active=$1,
+         insurance_activated_at = case when $1 then coalesce(insurance_activated_at, now()) else null end
+       where id=$2 returning id, email, insurance_active, insurance_activated_at`,
+      [active, req.params.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'not_found' });
+    await audit(req, active ? 'insurance.grant' : 'insurance.revoke', 'user', req.params.id, {});
+    res.json({ user: r.rows[0] });
   } catch (e) { next(e); }
 });
 

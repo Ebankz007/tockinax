@@ -89,6 +89,12 @@ async function main() {
   create table if not exists token_holdings (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, token_code varchar(32) not null references token_definitions(code), qty numeric(19,4) not null, cost_usdt numeric(19,4) not null, lock_days integer not null check (lock_days in (7,14)), status varchar(24) not null default 'locked', purchased_at timestamptz not null default now(), matures_at timestamptz not null, listing_id uuid, created_at timestamptz not null default now());
   create index if not exists token_holdings_user_idx on token_holdings (user_id);
   create index if not exists token_holdings_status_idx on token_holdings (status);
+  create table if not exists insurance_policies (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, token_code varchar(32) not null, holding_id uuid references token_holdings(id) on delete cascade, coverage_amount numeric(19,4) not null, premium_paid numeric(19,4) not null, status varchar(24) not null default 'active', starts_at timestamptz not null default now(), expires_at timestamptz not null, terms text not null default '', created_at timestamptz not null default now());
+  create index if not exists insurance_policies_user_idx on insurance_policies (user_id);
+  create index if not exists insurance_policies_status_idx on insurance_policies (status);
+  create table if not exists insurance_claims (id uuid primary key default gen_random_uuid(), policy_id uuid not null references insurance_policies(id) on delete cascade, user_id uuid not null references users(id) on delete cascade, amount numeric(19,4) not null, reason varchar(64) not null, evidence_ref text, status varchar(24) not null default 'pending', reviewed_by uuid references users(id), reviewed_at timestamptz, payout_id uuid references payout_requests(id), created_at timestamptz not null default now());
+  create index if not exists insurance_claims_user_idx on insurance_claims (user_id);
+  create index if not exists insurance_claims_status_idx on insurance_claims (status);
   create table if not exists participation_cycles (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, holding_id uuid not null references token_holdings(id) on delete cascade unique, started_at timestamptz not null default now(), matured_at timestamptz, settled_at timestamptz, status varchar(24) not null default 'started', success boolean not null default false, created_at timestamptz not null default now());
   create index if not exists participation_cycles_user_idx on participation_cycles (user_id);
   create table if not exists stage_definitions (stage integer primary key, name varchar(64) not null, min_buy numeric(19,4), max_buy numeric(19,4), req_cycles_7d integer not null default 0, req_cycles_14d integer not null default 0, upgrade_fee numeric(19,4), renewal_fee numeric(19,4));
@@ -108,6 +114,8 @@ async function main() {
   alter table commission_calculations add column if not exists generation integer;
   alter table users add column if not exists stage integer not null default 1;
   alter table users add column if not exists member_no varchar(16);
+  alter table users add column if not exists insurance_active boolean not null default false;
+  alter table users add column if not exists insurance_activated_at timestamptz;
   `;
   await pool.query(tokenDdl);
 

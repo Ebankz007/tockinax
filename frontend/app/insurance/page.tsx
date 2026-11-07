@@ -15,22 +15,36 @@ function InsurancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [accountActive, setAccountActive] = useState<boolean | null>(null);
+  const [insBusy, setInsBusy] = useState(false);
 
   async function load() {
     setLoading(true);
     setError('');
     try {
-      const [p, c] = await Promise.all([
+      const [p, c, s] = await Promise.all([
         api.get<{ items: InsurancePolicy[] }>('/insurance/coverage').catch(() => ({ items: [] as InsurancePolicy[] })),
         api.get<{ items: InsuranceClaim[] }>('/insurance/claims/mine').catch(() => ({ items: [] as InsuranceClaim[] })),
+        api.get<{ insurance_active: boolean }>('/auth/insurance/status').catch(() => ({ insurance_active: false })),
       ]);
       setPolicies(p.items);
       setClaims(c.items);
+      setAccountActive(!!s.insurance_active);
     } catch (e) {
       setError(errMsg(e));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function activateInsurance() {
+    setInsBusy(true); setError(''); setMsg('');
+    try {
+      await api.post('/auth/insurance/activate', { insurance_type: 'standard' });
+      setMsg('Account insurance activated.');
+      await load();
+    } catch (e) { setError(errMsg(e)); }
+    finally { setInsBusy(false); }
   }
 
   useEffect(() => { void load(); }, []);
@@ -82,6 +96,24 @@ function InsurancePage() {
       {error && <p className="alert-error" role="alert">{error}</p>}
       {msg && <p className="alert-ok" role="status">{msg}</p>}
 
+      <section className="card space-y-2">
+        <h2 className="font-display font-semibold text-white">Account insurance</h2>
+        {accountActive === null ? (
+          <p role="status" className="text-mist">Checking insurance status…</p>
+        ) : accountActive ? (
+          <p className="alert-ok" role="status">Insurance is active on your account. Token purchases can be submitted for admin review.</p>
+        ) : (
+          <>
+            <p className="alert-warn" role="note">
+              Insurance is not active on your account. Activate it before purchasing tokens or a coverage policy.
+            </p>
+            <button className="btn-primary" onClick={activateInsurance} disabled={insBusy}>
+              {insBusy ? 'Activating…' : 'Activate insurance'}
+            </button>
+          </>
+        )}
+      </section>
+
       <nav className="flex flex-wrap gap-2" aria-label="Insurance tabs">
         <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'coverage' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('coverage')} aria-pressed={tab === 'coverage'}>
           My coverage
@@ -89,7 +121,7 @@ function InsurancePage() {
         <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'claims' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('claims')} aria-pressed={tab === 'claims'}>
           My claims
         </button>
-        <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'purchase' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('purchase')} aria-pressed={tab === 'purchase'}>
+        <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'purchase' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('purchase')} aria-pressed={tab === 'purchase'} disabled={accountActive !== true} title={accountActive === true ? undefined : 'Activate account insurance first'}>
           Buy a policy
         </button>
         {activePolicies.length > 0 && (

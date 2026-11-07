@@ -127,7 +127,6 @@ function DashboardInner() {
       <Link href="/dashboard/wallet" className="btn-secondary">Wallet</Link>
       <Link href="/dashboard/support" className="btn-secondary">Support</Link>
       <Link href="/change-password" className="btn-secondary">Change password</Link>
-      <Link href="/forgot-password" className="btn-secondary">Forgot password</Link>
       <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>
     </nav>
     <RiskStrip compact />

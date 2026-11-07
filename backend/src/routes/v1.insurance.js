@@ -64,6 +64,10 @@ router.post('/purchase', async (req, res, next) => {
     }).parse(req.body);
 
     const pool = getPool();
+    // Require insurance membership activation before purchasing coverage
+    const u = await pool.query(`select insurance_active from users where id=$1`, [req.user.id]);
+    if (!u.rowCount || !u.rows[0].insurance_active) return res.status(403).json({ error: 'insurance_not_active', message: 'Insurance membership not activated. Please activate insurance before purchasing coverage.' });
+
     const coverage = new Decimal(b.coverage_amount);
     if (coverage.lte(0)) return res.status(400).json({ error: 'invalid_coverage' });
 

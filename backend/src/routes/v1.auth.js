@@ -301,7 +301,43 @@ router.post('/forgot-password', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /auth/insurance/activate — activate insurance membership for account
+router.post('/insurance/activate', authRequired, async (req, res, next) => {
+  try {
+    const { insurance_type } = req.body;
+    const pool = getPool();
+    const u = await pool.query(
+      `update users set insurance_active = true, insurance_activated_at = now() where id = $1
+       returning id, email, insurance_active, insurance_activated_at`,
+      [req.user.id]
+    );
+    if (!u.rowCount) return res.status(404).json({ error: 'not_found' });
+    await pool.query(
+      `insert into audit_logs (actor_id, action, target_type, target_id, diff, ip)
+       values ($1,'insurance.activate','user',$2,$3,$4)`,
+      [req.user.id, req.user.id, JSON.stringify({ insurance_type: insurance_type || 'standard' }), req.ip]
+    );
+    res.json({ ok: true, insurance_active: u.rows[0].insurance_active, insurance_activated_at: u.rows[0].insurance_activated_at, message: 'Insurance activated successfully' });
+  } catch (e) { next(e); }
+});
+
+// GET /auth/insurance/status — account-level insurance membership status
+router.get('/insurance/status', authRequired, async (req, res, next) => {
+  try {
+    const r = await getPool().query(
+      `select insurance_active, insurance_activated_at from users where id=$1`,
+      [req.user.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'not_found' });
+    res.json({
+      insurance_active: !!r.rows[0].insurance_active,
+      insurance_activated_at: r.rows[0].insurance_activated_at,
+    });
+  } catch (e) { next(e); }
+});
+
 // POST /auth/change-password — require current password, set a new one
+router.post('/change-password', authRequired, async (req, res, next) => {
   try {
     const b = z.object({
       current_password: z.string().min(1),

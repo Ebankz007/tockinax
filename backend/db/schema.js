@@ -30,6 +30,8 @@ const users = pgTable('users', {
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   stage: integer('stage').notNull().default(1),
   memberNo: varchar('member_no', { length: 16 }),
+  insuranceActive: boolean('insurance_active').notNull().default(false),
+  insuranceActivatedAt: timestamp('insurance_activated_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

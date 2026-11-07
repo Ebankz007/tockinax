@@ -67,6 +67,16 @@ router.post('/purchase', async (req, res, next) => {
     const cost = new Decimal(b.amount_usdt);
     if (cost.lte(0)) return res.status(400).json({ error: 'invalid_amount' });
 
+    // Account-level insurance gate — the member must activate insurance on the
+    // account before any token purchase can be submitted.
+    const ins = await pool.query(`select insurance_active from users where id=$1`, [req.user.id]);
+    if (!ins.rowCount || !ins.rows[0].insurance_active) {
+      return res.status(403).json({
+        error: 'insurance_not_active',
+        message: 'Activate insurance on your account before purchasing tokens.',
+      });
+    }
+
     const { stage, def } = await userStage(pool, req.user.id);
     // Stage limit check — NULL = unlimited (placeholder, never invent limits)
     if (def) {
@@ -87,35 +97,21 @@ router.post('/purchase', async (req, res, next) => {
     const holdingId = crypto.randomUUID();
     const now = new Date();
     const mat = maturesAt(now, b.lock_days);
-    // Member spends SIM-USDT: reduce company liability (debit LIAB), park in clearing (credit SIM).
-    // Balanced in USDT; token qty itself is a MEMO-style record in token_holdings (no TKX ledger legs).
-    try {
-      await postBalanced({
-        sourceType: 'sim_purchase',
-        sourceId: holdingId,
-        currency: 'USDT',
-        memo: `sim purchase ${holdingId} user ${req.user.id}`,
-        idempotencyKey: `sim:purchase:${holdingId}`,
-        lines: [
-          { account: 'LIAB:sim_usdt', debit: cost.toFixed(4) },
-          { account: 'SIM:usdt_clearing', credit: cost.toFixed(4) },
-        ],
-      });
-    } catch (e) {
-      return res.status(502).json({ error: 'ledger_error', message: e.message });
-    }
 
+    // Purchases are queued for manual admin review. No ledger movement and no
+    // participation cycle are created until an admin approves the purchase.
     const h = await pool.query(
       `insert into token_holdings (id, user_id, token_code, qty, cost_usdt, lock_days, status, purchased_at, matures_at)
-       values ($1,$2,'TKX',$3,$4,$5,'locked',now(),$6) returning *`,
+       values ($1,$2,'TKX',$3,$4,$5,'pending_approval',now(),$6) returning *`,
       [holdingId, req.user.id, cost.toFixed(4), cost.toFixed(4), b.lock_days, mat.toISOString()]
     );
-    const c = await pool.query(
-      `insert into participation_cycles (user_id, holding_id, started_at, status, success)
-       values ($1,$2,now(),'started',false) returning *`,
-      [req.user.id, holdingId]
-    );
-    res.status(201).json({ holding: h.rows[0], cycle: c.rows[0], pricing: priced });
+    res.status(201).json({
+      holding: h.rows[0],
+      cycle: null,
+      pricing: priced,
+      status: 'pending_approval',
+      message: 'Purchase submitted. The system admin will review and activate it shortly.',
+    });
   } catch (e) { next(e); }
 });
 

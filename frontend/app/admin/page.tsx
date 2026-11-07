@@ -82,6 +82,7 @@ function AdminInner() {
     </div>
     <nav className="flex flex-wrap gap-2 text-sm" aria-label="Admin sections">
       <Link href="/admin/token-ops" className="btn-primary">Token ops</Link>
+      <Link href="/admin/approvals" className="btn-primary">Purchase approvals</Link>
       <Link href="/admin/deposits" className="btn-secondary">Deposits review</Link>
       <Link href="/admin/withdrawals" className="btn-secondary">Withdrawals review</Link>
       <Link href="/admin/stages" className="btn-secondary">Stages config</Link>
@@ -94,7 +95,6 @@ function AdminInner() {
       <Link href="/admin/users" className="btn-secondary">Users</Link>
       <Link href="/admin/roles" className="btn-secondary">Roles & permissions</Link>
       <Link href="/change-password" className="btn-secondary">Change password</Link>
-      <Link href="/forgot-password" className="btn-secondary">Forgot password</Link>
       <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>
     </nav>
   </div>;

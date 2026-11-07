@@ -54,7 +54,46 @@ function Portfolio({ reloadKey }: { reloadKey: number }) {
   );
 }
 
-function BuyLock({ onDone }: { onDone: () => void }) {
+function InsuranceCard({ active, onChanged }: { active: boolean | null; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function activate() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/auth/insurance/activate', { insurance_type: 'standard' });
+      onChanged();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-2">
+      <h2 className="font-display font-semibold text-white">Account insurance</h2>
+      {active === null ? (
+        <p role="status" className="text-mist">Checking insurance status…</p>
+      ) : active ? (
+        <p className="alert-ok" role="status">Insurance is active on your account. Token purchases can be submitted for admin review.</p>
+      ) : (
+        <>
+          <p className="alert-warn" role="note">
+            Insurance is not active on your account. Activate it before you can purchase tokens.
+          </p>
+          {error && <p className="alert-error" role="alert">{error}</p>}
+          <button className="btn-primary" onClick={activate} disabled={busy}>
+            {busy ? 'Activating…' : 'Activate insurance'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BuyLock({ onDone, insuranceActive }: { onDone: () => void; insuranceActive: boolean | null }) {
   const [amount, setAmount] = useState('100');
   const [cycle, setCycle] = useState<7 | 14>(7);
   const [agreed, setAgreed] = useState(false);
@@ -79,7 +118,7 @@ function BuyLock({ onDone }: { onDone: () => void }) {
     setDeploying(false);
     try {
       await api.post('/tokens/purchase', { amount: num(amount), cycle_days: cycle, agreed_risk: agreed });
-      setOk(`Locked ${amount} for ${cycle} days. Target ${target} (TARGET — not guaranteed).`);
+      setOk(`Submitted ${amount} for ${cycle} days. The system admin will review and activate your purchase shortly.`);
       onDone();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status >= 500)) {
@@ -126,27 +165,41 @@ function BuyLock({ onDone }: { onDone: () => void }) {
           I understand this is not live yet, and I have read the <Link href="/risk" className="text-gold underline">risk disclosure</Link>.
         </label>
       </div>
-      <button className="btn-primary w-full" disabled={busy || !agreed}>
-        {busy ? 'Locking…' : `Lock ${amount || '0'} for ${cycle} days`}
+      {insuranceActive === false && (
+        <p className="alert-warn" role="note">Activate account insurance above to enable token purchases.</p>
+      )}
+      <button className="btn-primary w-full" disabled={busy || !agreed || insuranceActive !== true}>
+        {busy ? 'Submitting…' : `Submit ${amount || '0'} for ${cycle} days`}
       </button>
-      <p className="hint">Fee shown at confirmation. Stage limits apply.</p>
+      <p className="hint">Purchases are reviewed and activated manually by the system admin.</p>
     </form>
   );
 }
 
 function TokensInner() {
   const [reloadKey, setReloadKey] = useState(0);
+  const [insuranceActive, setInsuranceActive] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.get<{ insurance_active: boolean }>('/auth/insurance/status')
+      .then((d) => { if (alive) setInsuranceActive(!!d.insurance_active); })
+      .catch(() => { if (alive) setInsuranceActive(false); });
+    return () => { alive = false; };
+  }, [reloadKey]);
+
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">
         Tokens &amp; portfolio
       </h1>
+      <InsuranceCard active={insuranceActive} onChanged={() => setReloadKey((k) => k + 1)} />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card space-y-2">
           <h2 className="font-display font-semibold text-white">Holdings</h2>
           <Portfolio reloadKey={reloadKey} />
         </div>
-        <BuyLock onDone={() => setReloadKey((k) => k + 1)} />
+        <BuyLock insuranceActive={insuranceActive} onDone={() => setReloadKey((k) => k + 1)} />
       </div>
       <p className="text-sm">
         <Link href="/dashboard/token-market" className="text-gold underline">Go to token market →</Link>{' '}
