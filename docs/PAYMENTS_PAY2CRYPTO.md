@@ -74,7 +74,7 @@ API before crediting** in live mode.
 1. `POST /api/v1/withdrawals/request {amount, dest_address}` (auth):
    TRC20 format check (`T…`, 34 base58 chars) → `400 invalid_trc20_address`;
    availability = ledger funding − token spends − open/paid withdrawals →
-   `422 insufficient_sim_usdt`. Creates `requested` + event + audit.
+   `422 insufficient_balance`. Creates `requested` + event + audit.
 2. `GET /mine` (member). Finance: `GET /queue?status=`.
 3. `POST /:id/review {approve|reject, note}` (finance/admin): below threshold
    single approval → `approved`; above threshold first approval →

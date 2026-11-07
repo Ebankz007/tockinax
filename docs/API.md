@@ -153,7 +153,7 @@ Record-only until `feature_flags.live_payments=true`. With live off, events are 
 
 | Method + path | Auth | Body → response |
 |---|---|---|
-| `POST /api/v1/tokens/purchase` | member | `{amount_usdt\|amount, lock_days\|cycle_days: 7\|14}` → 201 `{holding, cycle, pricing}`; 422 `insufficient_sim_usdt`; target = simple cost×(1+1%×days) |
+| `POST /api/v1/tokens/purchase` | member | `{amount_usdt\|amount, lock_days\|cycle_days: 7\|14}` → 201 `{holding, cycle, pricing}`; 403 `insurance_not_active`; 422 `insufficient_balance`; target = simple cost×(1+1%×days) |
 | `GET /api/v1/tokens/holdings` (=`/holdings/mine`) | member | `{items:[{qty, cost_usdt, lock_days, status, matures_at}]}` |
 | `GET /api/v1/tokens/cycles` (=`/cycles/mine`) | member | `{items, eligibility:{success_7d/14d, required_7d/14d}}` — success needs settled resale, never time alone |
 | `GET /api/v1/tokens/stage/me` (=`/stages/current`) | member | `{current, limits, requirements, upgrade:{fee\|fee_unset}, renewal}` — NULL = TBD placeholder |
@@ -181,4 +181,4 @@ Record-only until `feature_flags.live_payments=true`. With live off, events are 
 | `GET /api/v1/withdrawals/queue` (=`/admin/queue`) · `POST /:id/review {approve\|reject}` · `POST /:id/execute` | finance | dual approval above threshold; execute sandbox → paid w/ `sandbox-tx-*`, live → 403 `live_disabled` |
 | `GET /api/v1/deposits/admin/queue` · `POST /admin/:id/decision {cancel}` | finance | oversight |
 
-New token error codes: `fee_unset`/`configuration_locked`/`max_stage` 409 · `unsupported_network`/`invalid_trc20_address` 400 · `live_disabled` 409/403 · `insufficient_sim_usdt`/`insufficient_remaining` 422/409 · `need_second_approver` 409.
+New token error codes: `fee_unset`/`configuration_locked`/`max_stage` 409 · `unsupported_network`/`invalid_trc20_address` 400 · `live_disabled` 409/403 · `insufficient_balance`/`insufficient_remaining` 422/409 · `need_second_approver` 409.

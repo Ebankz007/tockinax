@@ -66,7 +66,7 @@ router.post('/listings/:id/buy', async (req, res, next) => {
       // Buyer SIM-USDT balance (same helper as tokens route — funding from ledger minus spends plus proceeds)
       const { simBalance } = require('./v1.tokens');
       const bal = await simBalance(req.user.id, client);
-      if (bal.lessThan(totalDec)) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'insufficient_sim_usdt', balance: bal.toFixed(4) }); }
+      if (bal.lessThan(totalDec)) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'insufficient_balance', message: 'Insufficient USDT balance for this purchase.', balance: bal.toFixed(4) }); }
 
       // Settle USDT buyer -> seller proceeds. Single 4-leg balanced tx (global clearing accounts;
       // per-user attribution lives in token_fills + token_listings domain records).

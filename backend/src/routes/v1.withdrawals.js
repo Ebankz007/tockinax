@@ -139,7 +139,7 @@ router.post('/request', async (req, res, next) => {
     const pool = getPool();
     const avail = await availableSimUsdt(pool, req.user.id);
     if (avail.lessThan(amt)) {
-      return res.status(422).json({ error: 'insufficient_sim_usdt', available: avail.toFixed(4) });
+      return res.status(422).json({ error: 'insufficient_balance', message: 'Insufficient available balance for this withdrawal.', available: avail.toFixed(4) });
     }
     const key = b.idempotencyKey || `wd:${req.user.id}:${amt.toFixed(4)}:${crypto.randomBytes(8).toString('hex')}`;
     const r = await pool.query(
@@ -210,7 +210,7 @@ router.post('/:id/review', financeOnly, async (req, res, next) => {
     const avail = await availableSimUsdt(pool, w.user_id);
     // Availability already nets this request as locked; add it back for the check.
     if (avail.plus(new Decimal(w.amount)).lessThan(new Decimal(w.amount))) {
-      return res.status(422).json({ error: 'insufficient_sim_usdt', available: avail.toFixed(4) });
+      return res.status(422).json({ error: 'insufficient_balance', message: 'Insufficient available balance for this withdrawal.', available: avail.toFixed(4) });
     }
     const threshold = await dualThreshold(pool);
     if (new Decimal(w.amount).greaterThan(threshold)) {

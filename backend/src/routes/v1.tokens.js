@@ -90,7 +90,7 @@ router.post('/purchase', async (req, res, next) => {
 
     const bal = await simBalance(req.user.id, pool);
     if (bal.lessThan(cost)) {
-      return res.status(422).json({ error: 'insufficient_sim_usdt', balance: bal.toFixed(4) });
+      return res.status(422).json({ error: 'insufficient_balance', message: 'Insufficient USDT balance for this purchase.', balance: bal.toFixed(4) });
     }
 
     const priced = await targetPrice(b.amount_usdt, b.lock_days);
