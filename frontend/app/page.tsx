@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import RiskStrip from '@/components/RiskStrip';
-import LockSimulator from '@/components/LockSimulator';
+import TargetCalculator from '@/components/TargetCalculator';
 import {
   STAGES,
   REFERRAL_CATEGORIES,
@@ -124,9 +124,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Simulator + cycle targets ────────────────────────── */}
-      <section aria-label="Lock simulator" className="grid gap-4 lg:grid-cols-2">
-        <LockSimulator />
+      {/* ── Target calculator + cycle targets ────────────────── */}
+      <section aria-label="Target-price calculator" className="grid gap-4 lg:grid-cols-2">
+        <TargetCalculator />
 
         <div className="space-y-4">
           {([7, 14] as const).map((d) => {

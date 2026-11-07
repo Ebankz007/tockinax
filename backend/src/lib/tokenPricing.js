@@ -1,5 +1,5 @@
 // Token pricing — SIMPLE interest only, Decimal.js, never float.
-// Simulated pilot: 1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled.
+// 1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled.
 // Rule semantics: pricing_rules.rate_bps_per_day is PER-DAY bps (100 = 1%/day).
 //   Term total for 7d  = 100*7  = 700 bps  (7%)  => 100 -> 107
 //   Term total for 14d = 100*14 = 1400 bps (14%) => 100 -> 114

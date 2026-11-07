@@ -6,10 +6,10 @@ import { PLATFORM_RULES, targetResale, usdt } from '@/lib/plan';
 const PRESETS = [100, 500, 1000, 5000];
 
 /**
- * Lock simulator. The maths is real — 1% per day simple, non-compounded — but
- * a target resale price is not a return until a buyer pays it.
+ * Target-price calculator. The maths is real — 1% per day simple, non-compounded —
+ * but a target resale price is not a return until a buyer pays it.
  */
-export default function LockSimulator() {
+export default function TargetCalculator() {
   const [amount, setAmount] = useState(1000);
   const [days, setDays] = useState<7 | 14>(14);
 
@@ -22,7 +22,7 @@ export default function LockSimulator() {
     <div className="rounded-2xl border border-edge/70 bg-surface p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-display text-lg font-bold text-bright">Lock simulator</h3>
+          <h3 className="font-display text-lg font-bold text-bright">Target-price calculator</h3>
           <p className="text-xs text-mist">Simple, non-compounded. Target resale price, not a guaranteed payout.</p>
         </div>
         <div className="inline-flex rounded-xl border border-edge/70 bg-ink p-1">
@@ -41,19 +41,19 @@ export default function LockSimulator() {
         </div>
       </div>
 
-      <label htmlFor="sim-amount" className="mt-5 block text-xs font-semibold uppercase tracking-wider text-mist">
+      <label htmlFor="calc-amount" className="mt-5 block text-xs font-semibold uppercase tracking-wider text-mist">
         Purchase amount (USDT)
       </label>
       <div className="mt-1.5 flex items-center rounded-xl border border-edge/70 bg-ink px-3 focus-within:border-gold/60">
         <input
-          id="sim-amount"
+          id="calc-amount"
           type="number"
           min={0}
           step={50}
           value={Number.isFinite(amount) ? amount : ''}
           onChange={(e) => setAmount(parseFloat(e.target.value))}
           className="w-full bg-transparent py-2.5 font-mono text-lg font-semibold text-bright outline-none tnum"
-          aria-describedby="sim-note"
+          aria-describedby="calc-note"
         />
         <span className="font-mono text-xs font-semibold text-mist">USDT</span>
       </div>
@@ -82,7 +82,7 @@ export default function LockSimulator() {
         </div>
       </dl>
 
-      <p id="sim-note" className="mt-4 text-xs leading-relaxed text-mist">
+      <p id="calc-note" className="mt-4 text-xs leading-relaxed text-mist">
         {days}-day lock at {PLATFORM_RULES.dailyTargetRate * 100}% per day, simple and
         non-compounded, gives a <strong className="text-bright">{pct}% target</strong> over the
         period. This is arithmetic on a sticker price, not a return: the position must find a

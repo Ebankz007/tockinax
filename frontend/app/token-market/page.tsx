@@ -16,8 +16,8 @@ function RemainingBar({ total, left }: { total: number; left: number }) {
 }
 
 const PREVIEW: TokenListing[] = [
-  { id: 'sim-1', token_code: 'TKX-7', price: 107, qty_total: 100, qty_remaining: 64, status: 'open' },
-  { id: 'sim-2', token_code: 'TKX-14', price: 114, qty_total: 50, qty_remaining: 12, status: 'open' },
+  { id: 'demo-1', token_code: 'TKX-7', price: 107, qty_total: 100, qty_remaining: 64, status: 'open' },
+  { id: 'demo-2', token_code: 'TKX-14', price: 114, qty_total: 50, qty_remaining: 12, status: 'open' },
 ];
 
 export default function TokenMarketPage() {
