@@ -2,7 +2,7 @@
 
 No live payments, crypto settlement, custodial balances, or reward payouts until every box is ticked with evidence.
 
-- [ ] Jurisdiction memo: Nigeria (SEC/AML) + operating entity (MMITPS INC) advice on marketplace + referral compensation. Evidence: counsel letter.
+- [ ] Jurisdiction memo: Nigeria (SEC/AML) + operating entity (TOCKINAX) advice on marketplace + referral compensation. Evidence: counsel letter.
 - [ ] Marketplace rules + refund/dispute policy published via CMS (`content_pages`) with version + timestamp.
 - [ ] Registration/service fee schedule (amount, currency, services, refund) approved + configured in `service_fees`.
 - [ ] Referral program disclosure (basis = verified sales only, levels, rates, confirmation period, caps) published + `commission_rules` v1 activated with budget.

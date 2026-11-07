@@ -126,7 +126,7 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
   }
 
   await pool.query(`insert into system_settings (key, value) values
-    ('platform', '{"name":"TOCKINAX","company":"MMITPS INC","domain":"tockinax.com"}'),
+    ('platform', '{"name":"TOCKINAX","company":"TOCKINAX","domain":"tockinax.com"}'),
     ('allowed_currencies', '["USD","NGN"]'),
     ('payout_policy', '{"min_usd":"10","dual_approval_ngn":500000,"schedule":"manual_review"}')
     on conflict (key) do nothing`);

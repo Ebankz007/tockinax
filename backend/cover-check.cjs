@@ -30,7 +30,8 @@ const H = (t) => ({ Authorization: 'Bearer ' + t });
     const r = await request(app).post('/api/v1/auth/register').send({ email, password: 'SuperSecure123!', referralCode: refCode, acceptTerms: true });
     await request(app).post('/api/v1/auth/verify-email').send({ email, token: r.body.devVerifyToken });
     const l = await request(app).post('/api/v1/auth/login').send({ email, password: 'SuperSecure123!' });
-    return { token: l.body.access };
+    const u = await pool.query(`select id from users where lower(email)=$1`, [email.toLowerCase()]);
+    return { token: l.body.access, id: u.rows[0] && u.rows[0].id };
   };
   const m = await reg(`cov-m${ts}@test.com`);
   // admin via DB

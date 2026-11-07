@@ -22,7 +22,7 @@ money — never by new inflow. If a gate cannot name its funding source, it stay
 ## Premortem (the disaster we're designing against)
 
 "It's March. Commissions went live before 100 sales, a Stage B campaign launched on
-borrowed framing, inflow slowed one weekend, the queue screamed Ponzi, and MMITPS is
+borrowed framing, inflow slowed one weekend, the queue screamed Ponzi, and TOCKINAX is
 answering the SEC." Every control above (budget caps, 3× rule, 100-sale gate, dual
 approval, 403s) exists to make that sentence un-writable.
 
