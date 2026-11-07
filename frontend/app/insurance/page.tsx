@@ -6,7 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
 import { api, errMsg, ApiError, type InsurancePolicy, type InsuranceClaim } from '@/lib/api';
 
-type Tab = 'coverage' | 'claims' | 'purchase' | 'file';
+type Tab = 'coverage' | 'claims' | 'file';
 
 function InsurancePage() {
   const [tab, setTab] = useState<Tab>('coverage');
@@ -51,24 +51,6 @@ function InsurancePage() {
 
   const activePolicies = policies.filter((p) => p.status === 'active');
   const pendingClaims = claims.filter((c) => c.status === 'pending');
-
-  async function purchase(e: React.FormEvent) {
-    e.preventDefault();
-    setError(''); setMsg('');
-    const fd = new FormData(e.currentTarget as HTMLFormElement);
-    const tokenCode = fd.get('token_code') as string;
-    const holdingId = fd.get('holding_id') as string || undefined;
-    const coverage = fd.get('coverage_amount') as string;
-    const premium = fd.get('premium_paid') as string;
-    const expires = fd.get('expires_at') as string || undefined;
-    const terms = fd.get('terms') as string || undefined;
-    try {
-      await api.post('/insurance/purchase', { token_code: tokenCode, holding_id: holdingId, coverage_amount: coverage, premium_paid: premium, expires_at: expires, terms });
-      setMsg('Policy purchased.');
-      await load();
-      setTab('coverage');
-    } catch (e) { setError(errMsg(e)); }
-  }
 
   async function claim(e: React.FormEvent) {
     e.preventDefault();
@@ -121,9 +103,6 @@ function InsurancePage() {
         <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'claims' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('claims')} aria-pressed={tab === 'claims'}>
           My claims
         </button>
-        <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'purchase' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('purchase')} aria-pressed={tab === 'purchase'} disabled={accountActive !== true} title={accountActive === true ? undefined : 'Activate account insurance first'}>
-          Buy a policy
-        </button>
         {activePolicies.length > 0 && (
           <button className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${tab === 'file' ? 'bg-gold text-black' : 'border-edge/70 text-mist hover:border-gold/40'}`} onClick={() => setTab('file')} aria-pressed={tab === 'file'}>
             File a claim
@@ -136,7 +115,7 @@ function InsurancePage() {
         <section className="card space-y-3">
           <h2 className="font-display font-semibold text-white">Active policies</h2>
           {activePolicies.length === 0 ? (
-            <p className="text-mist text-sm">No active insurance policies. Buy a policy to protect a locked position.</p>
+            <p className="text-mist text-sm">No active coverage policies. Activate account insurance above to protect your positions.</p>
           ) : (
             <table className="table">
               <thead>
@@ -194,46 +173,6 @@ function InsurancePage() {
               </tbody>
             </table>
           )}
-        </section>
-      )}
-
-      {/* ── Buy a policy ─────────────────────────────────────── */}
-      {tab === 'purchase' && (
-        <section className="card space-y-3">
-          <h2 className="font-display font-semibold text-white">Purchase a policy</h2>
-          <p className="text-xs text-mist">
-            Insurance covers your locked position up to the coverage amount. Premium is paid in USDT
-            and is non-refundable once the policy is active. A claim pays out only after admin review.
-          </p>
-          <form onSubmit={purchase} className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Token code</label>
-                <input name="token_code" defaultValue="TKX" className="input w-full" required />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Holding ID (optional)</label>
-                <input name="holding_id" placeholder="Leave blank for general coverage" className="input w-full" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Coverage amount (USDT)</label>
-                <input name="coverage_amount" type="number" step="0.0001" min="0" className="input w-full" required />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Premium (USDT)</label>
-                <input name="premium_paid" type="number" step="0.0001" min="0" className="input w-full" required />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Expires at</label>
-                <input name="expires_at" type="datetime-local" className="input w-full" required />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-mist mb-1">Terms / notes</label>
-                <textarea name="terms" rows={2} className="input w-full" placeholder="Optional terms or notes for this policy" />
-              </div>
-            </div>
-            <button className="btn-primary" type="submit">Purchase policy</button>
-          </form>
         </section>
       )}
 
