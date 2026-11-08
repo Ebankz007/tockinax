@@ -92,14 +92,31 @@ router.post('/seller/apply', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /notifications
+// GET /notifications?category=&unread=1
 router.get('/notifications', async (req, res, next) => {
   try {
+    const category = typeof req.query.category === 'string' && req.query.category ? req.query.category : null;
+    const unread = String(req.query.unread || '') === '1';
+    const params = [req.user.id];
+    const where = ['user_id = $1'];
+    if (category) { params.push(category); where.push(`category = $${params.length}`); }
+    if (unread) where.push('read_at is null');
     const r = await getPool().query(
-      `select * from notifications where user_id = $1 order by created_at desc limit 50`,
-      [req.user.id]
+      `select * from notifications where ${where.join(' and ')} order by created_at desc limit 50`,
+      params
     );
     res.json(r.rows);
+  } catch (e) { next(e); }
+});
+
+// POST /notifications/read-all
+router.post('/notifications/read-all', async (req, res, next) => {
+  try {
+    const r = await getPool().query(
+      `update notifications set read_at = now() where user_id = $1 and read_at is null returning id`,
+      [req.user.id]
+    );
+    res.json({ updated: r.rowCount });
   } catch (e) { next(e); }
 });
 

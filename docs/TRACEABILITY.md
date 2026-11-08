@@ -63,3 +63,38 @@
 4. Admin: explicit activation of rules/categories/fees (no NULL→value without disclosure + audit).
 
 No live enablement is included in this change set.
+
+## Community & weekly rewards — new entities → tests
+
+| Requirement | Module | Test / gate |
+|---|---|---|
+| Public testimonials page | `frontend/app/testimonials/page.tsx`, `v1.community.js` | `/testimonials` renders; status filter works |
+| Submit video/photo/written (MP4/MOV, JPG/PNG/WebP) | `v1.community.js` POST `/testimonials`, `mediaUpload()` | mime/size/duration limits enforced |
+| Magic-byte media validation (no extension trust) | `src/middleware/upload.js` `sniffKind`/`mediaUpload` | `tests/community.test.js` (offline) |
+| Configurable size/duration limits | `system_settings.community_rewards` (`max_video_mb`, `max_image_mb`, `max_video_seconds`) | seed defaults; admin-editable |
+| Admin approval workflow | `v1.community.js` POST `/testimonials/:id/review` | approve/reject/correction/feature/unpublish/suspect |
+| Only approved public | `v1.community.js` GET `/testimonials` filters `status='approved'` | unapproved excluded |
+| Public display: views, country, date, share | `TestimonialCard` | views from `testimonial_views` eligible count |
+| View tracking backend-validated | `POST /community/testimonials/:id/view` + `recordTestimonialView` | `tests/community.test.js` dedup + bot |
+| Dedup bucket + bot scoring | `view_dedup_hours`, `looksAutomated`, suspicion score | `tests/community.test.js` |
+| View spike flag | 100 views/10min → `suspicious=true` + audit log | code assertion |
+| Weekly Top-5 testimonial leaderboard | `testimonialRanking` + `competition_leaderboards` | `tests/community.test.js` top-5 by views |
+| Weekly Top-5 referrer leaderboard | `referralRanking` (verified reg + email + no self/fraud) | `tests/community.test.js` top-5 by referrals |
+| Weekly reset + history | `computeWeekWindow` + `competition_participants` retained | week_key changes; old rows kept |
+| Bonus config admin-editable | `weekly_bonus_configurations` (pool, position_rewards 1-5, min_metric, timezone, dow/time) | no hardcoded amounts anywhere |
+| Provisional winners at week end | `finalizeCompetition` → status `verifying` | idempotent replay |
+| Admin approve/disqualify | `approveAward`/`disqualifyAward` + `auditCompetition` | reason required for disqualify |
+| Ledger credit via postBalanced | `payAward` → `EXP:community_bonuses`/`LIAB:sim_usdt` | source_type=`community_bonus` |
+| Idempotency + unique reference | idempotency key `community_bonus:<id>`, `weekly_bonus_transactions.award_id` UNIQUE | `tests/community.test.js` replay=true, tx count=1 |
+| `availableSimUsdt` includes bonus credits | `v1.withdrawals.js` adds `community_bonus` source_type | ledger join on `weekly_bonus_awards` |
+| Weekly notifications | `publishAnnouncement`/`pushNotification`/`notifyAwardPaid` | in-app + optional email |
+| Member dashboard | `/dashboard/community` tabs | build PASS |
+| Admin management | `/admin/community` tabs | build PASS |
+| Social channels configurable | `social_media_accounts` + PUT `/admin/community/social-accounts` | seeded placeholders |
+| Social submissions + verification | `social_media_submissions`/`social_media_verifications` | admin verify/reject |
+| Promote Us section | `PromoteUs` component | captions, hashtags, copy buttons |
+| Disclosure: incentives, no positive-review requirement | `CompetitionRules` + API `disclosure` field | text assertion |
+| Existing referrals/commissions untouched | `commission_calculations`, `commission_categories` | no schema/route changes to existing |
+| Existing finance/ledger untouched | `postBalanced` unchanged; new source_type only | `tests/ledger.test.js` still green |
+| Tests | `backend/tests/community.test.js` | 11 suites, 76 passed (10 offline skips) |
+| Frontend build | `npm run build --workspace=frontend` | PASS |

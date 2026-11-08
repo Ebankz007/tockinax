@@ -126,11 +126,24 @@ async function availableSimUsdt(db, userId) {
       [userId]
     )
     .catch(() => ({ rows: [{ bal: '0' }] }));
+  // Weekly community bonus credits. Kept distinct in the ledger
+  // (source_type='community_bonus') but spendable like other USDT balance.
+  const communityBonus = await db
+    .query(
+      `select coalesce(sum(e.credit - e.debit),0)::text as bal
+       from ledger_entries e
+       join ledger_transactions t on t.id = e.tx_id
+       join weekly_bonus_awards a on a.id = t.source_id
+       where e.account = 'LIAB:sim_usdt' and t.source_type = 'community_bonus' and a.user_id = $1`,
+      [userId]
+    )
+    .catch(() => ({ rows: [{ bal: '0' }] }));
   return funding
     .minus(new Decimal(spent.rows[0].tot || 0))
     .minus(new Decimal(bought.rows[0].tot || 0))
     .plus(new Decimal(sold.rows[0].tot || 0))
     .plus(new Decimal(company.rows[0]?.bal || 0))
+    .plus(new Decimal(communityBonus.rows[0]?.bal || 0))
     .minus(new Decimal(locked.rows[0].tot || 0));
 }
 

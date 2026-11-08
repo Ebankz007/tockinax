@@ -21,6 +21,19 @@ async function authRequired(req, res, next) {
   } catch { return res.status(401).json({ error: 'unauthorized' }); }
 }
 
+// Optional auth for public endpoints that personalize when a session exists
+// (e.g. testimonial view dedup by member). Invalid/expired tokens are ignored.
+async function optionalAuth(req, _res, next) {
+  try {
+    const token = req.cookies?.tockinax_at || (req.headers.authorization || '').replace(/^Bearer /i, '');
+    if (!token) return next();
+    const p = jwt.verify(token, process.env.JWT_SECRET);
+    const r = await getPool().query(`select id, email, status from users where id=$1`, [p.sub]);
+    if (r.rows.length && !['suspended', 'banned'].includes(r.rows[0].status)) req.user = r.rows[0];
+  } catch { /* anonymous */ }
+  return next();
+}
+
 // Granular RBAC — checks DB, never trusts frontend flags.
 function requirePerm(...keys) {
   return async (req, res, next) => {
@@ -42,4 +55,4 @@ function requirePerm(...keys) {
   };
 }
 
-module.exports = { signAccess, signRefresh, authRequired, requirePerm };
+module.exports = { signAccess, signRefresh, authRequired, optionalAuth, requirePerm };

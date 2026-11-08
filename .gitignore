@@ -8,4 +8,5 @@ backend/storage/
 .env.production
 *.log
 *.dump
+*.tsbuildinfo
 .DS_Store

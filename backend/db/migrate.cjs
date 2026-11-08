@@ -139,6 +139,257 @@ async function main() {
   await pool.query(`alter table token_holdings add column if not exists settlement_option varchar(24) not null default 'marketplace'`);
   await pool.query(`alter table insurance_claims alter column policy_id drop not null`);
 
+  // ---- Community engagement & weekly rewards (append-only, idempotent) ----
+  // Testimonials, social promotion, two independent weekly competitions, bonus
+  // configuration/awards/payments and the announcement feed. Financial values are
+  // NEVER hardcoded here: rewards live in weekly_bonus_configurations and every
+  // payment posts through the existing double-entry ledger.
+  const communityDdl = `
+  create table if not exists testimonials (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    title varchar(160) not null,
+    body text not null default '',
+    display_name varchar(120) not null,
+    country varchar(2) not null default 'NG',
+    social_url text,
+    media_type varchar(16) not null default 'written' check (media_type in ('video','image','written')),
+    status varchar(24) not null default 'pending'
+      check (status in ('pending','approved','rejected','needs_correction','unpublished')),
+    featured boolean not null default false,
+    suspicious boolean not null default false,
+    suspicious_reason text,
+    consent boolean not null default false,
+    policy_accepted boolean not null default false,
+    published_at timestamptz,
+    reviewed_by uuid references users(id),
+    reviewed_at timestamptz,
+    admin_remarks text,
+    deleted_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+  create index if not exists testimonials_user_idx on testimonials (user_id);
+  create index if not exists testimonials_status_idx on testimonials (status);
+  create index if not exists testimonials_public_idx on testimonials (status, published_at desc);
+  create index if not exists testimonials_featured_idx on testimonials (featured) where featured = true;
+
+  create table if not exists testimonial_media (
+    id uuid primary key default gen_random_uuid(),
+    testimonial_id uuid not null references testimonials(id) on delete cascade,
+    kind varchar(8) not null check (kind in ('video','image')),
+    storage_key text not null,
+    mime varchar(64) not null default 'application/octet-stream',
+    bytes integer not null default 0,
+    original_name text,
+    duration_seconds numeric(10,2),
+    sort_order integer not null default 0,
+    created_at timestamptz not null default now()
+  );
+  create index if not exists testimonial_media_testimonial_idx on testimonial_media (testimonial_id);
+
+  create table if not exists testimonial_views (
+    id uuid primary key default gen_random_uuid(),
+    testimonial_id uuid not null references testimonials(id) on delete cascade,
+    user_id uuid references users(id) on delete set null,
+    viewer_hash varchar(64) not null,
+    ip_hash varchar(64),
+    ua_hash varchar(64),
+    bucket timestamptz not null,
+    eligible boolean not null default true,
+    suspicion_score integer not null default 0,
+    reason varchar(96),
+    created_at timestamptz not null default now()
+  );
+  create unique index if not exists testimonial_views_unique_idx on testimonial_views (testimonial_id, viewer_hash, bucket);
+  create index if not exists testimonial_views_testimonial_idx on testimonial_views (testimonial_id, created_at desc);
+  create index if not exists testimonial_views_eligible_idx on testimonial_views (testimonial_id, eligible);
+
+  create table if not exists social_media_accounts (
+    id uuid primary key default gen_random_uuid(),
+    platform varchar(32) not null unique,
+    label varchar(80) not null default '',
+    url text not null,
+    enabled boolean not null default true,
+    sort_order integer not null default 0,
+    updated_by uuid references users(id),
+    updated_at timestamptz not null default now()
+  );
+
+  create table if not exists social_media_submissions (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    platform varchar(32) not null,
+    post_url text not null,
+    caption text,
+    screenshot_key text,
+    status varchar(24) not null default 'pending'
+      check (status in ('pending','verified','rejected','needs_info')),
+    verification_method varchar(24),
+    verification_ref text,
+    admin_remarks text,
+    submitted_at timestamptz not null default now(),
+    reviewed_by uuid references users(id),
+    reviewed_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique (user_id, post_url)
+  );
+  create index if not exists social_submissions_user_idx on social_media_submissions (user_id);
+  create index if not exists social_submissions_status_idx on social_media_submissions (status);
+
+  create table if not exists social_media_verifications (
+    id uuid primary key default gen_random_uuid(),
+    submission_id uuid not null references social_media_submissions(id) on delete cascade,
+    method varchar(24) not null default 'admin',
+    status varchar(24) not null,
+    detail jsonb not null default '{}',
+    verified_by uuid references users(id),
+    created_at timestamptz not null default now()
+  );
+  create index if not exists social_verifications_submission_idx on social_media_verifications (submission_id);
+
+  create table if not exists weekly_competitions (
+    id uuid primary key default gen_random_uuid(),
+    kind varchar(16) not null check (kind in ('testimonial','referral')),
+    week_key varchar(16) not null,
+    starts_at timestamptz not null,
+    ends_at timestamptz not null,
+    timezone varchar(48) not null default 'UTC',
+    status varchar(24) not null default 'open'
+      check (status in ('scheduled','open','closing','verifying','finalized','cancelled')),
+    config jsonb not null default '{}',
+    finalized_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique (kind, week_key)
+  );
+  create index if not exists weekly_competitions_status_idx on weekly_competitions (status, ends_at);
+
+  create table if not exists competition_participants (
+    id uuid primary key default gen_random_uuid(),
+    competition_id uuid not null references weekly_competitions(id) on delete cascade,
+    user_id uuid not null references users(id) on delete cascade,
+    testimonial_id uuid references testimonials(id) on delete set null,
+    metric_value integer not null default 0,
+    qualified boolean not null default false,
+    qualification_reason text,
+    rank integer,
+    snapshot_at timestamptz not null default now(),
+    created_at timestamptz not null default now()
+  );
+  create index if not exists competition_participants_comp_idx on competition_participants (competition_id, rank);
+  create index if not exists competition_participants_user_idx on competition_participants (user_id);
+  create unique index if not exists competition_participants_testimonial_uidx
+    on competition_participants (competition_id, testimonial_id) where testimonial_id is not null;
+  create unique index if not exists competition_participants_user_uidx
+    on competition_participants (competition_id, user_id) where testimonial_id is null;
+
+  create table if not exists competition_leaderboards (
+    id uuid primary key default gen_random_uuid(),
+    competition_id uuid not null references weekly_competitions(id) on delete cascade,
+    rank integer not null,
+    user_id uuid references users(id) on delete set null,
+    testimonial_id uuid references testimonials(id) on delete set null,
+    metric_value integer not null default 0,
+    qualified boolean not null default true,
+    award_id uuid,
+    snapshot jsonb not null default '{}',
+    created_at timestamptz not null default now(),
+    unique (competition_id, rank)
+  );
+  create index if not exists competition_leaderboards_comp_idx on competition_leaderboards (competition_id, rank);
+
+  create table if not exists weekly_bonus_configurations (
+    id uuid primary key default gen_random_uuid(),
+    kind varchar(16) not null check (kind in ('testimonial','referral')),
+    active boolean not null default true,
+    pool_amount numeric(19,4) not null default 0 check (pool_amount >= 0),
+    currency varchar(8) not null default 'USDT',
+    position_rewards jsonb not null default '{"1":"0","2":"0","3":"0","4":"0","5":"0"}',
+    min_metric integer not null default 0 check (min_metric >= 0),
+    approval_required boolean not null default true,
+    notification_settings jsonb not null default '{"leaderboard_updates":true,"email":false,"public_amounts":true}',
+    timezone varchar(48) not null default 'UTC',
+    start_dow integer not null default 1 check (start_dow between 0 and 6),
+    start_time time not null default '00:00',
+    end_dow integer not null default 0 check (end_dow between 0 and 6),
+    end_time time not null default '23:59',
+    eligibility jsonb not null default '{"require_active":true,"require_verified_email":false,"require_registration_payment":false}',
+    effective_from timestamptz not null default now(),
+    updated_by uuid references users(id),
+    created_at timestamptz not null default now()
+  );
+  create unique index if not exists weekly_bonus_config_active_uidx
+    on weekly_bonus_configurations (kind) where active = true;
+
+  create table if not exists weekly_bonus_awards (
+    id uuid primary key default gen_random_uuid(),
+    competition_id uuid not null references weekly_competitions(id) on delete cascade,
+    kind varchar(16) not null check (kind in ('testimonial','referral')),
+    position integer not null check (position between 1 and 5),
+    user_id uuid not null references users(id) on delete cascade,
+    testimonial_id uuid references testimonials(id) on delete set null,
+    metric_value integer not null default 0,
+    amount numeric(19,4) not null default 0 check (amount >= 0),
+    currency varchar(8) not null default 'USDT',
+    status varchar(24) not null default 'provisional'
+      check (status in ('provisional','approved','disqualified','paid','cancelled')),
+    approved_by uuid references users(id),
+    approved_at timestamptz,
+    disqualify_reason text,
+    payment_status varchar(24) not null default 'unpaid'
+      check (payment_status in ('unpaid','paid','void')),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (competition_id, position)
+  );
+  create index if not exists weekly_bonus_awards_user_idx on weekly_bonus_awards (user_id, created_at desc);
+  create index if not exists weekly_bonus_awards_status_idx on weekly_bonus_awards (status);
+
+  create table if not exists weekly_bonus_transactions (
+    id uuid primary key default gen_random_uuid(),
+    award_id uuid not null references weekly_bonus_awards(id) on delete restrict unique,
+    ledger_tx_id uuid references ledger_transactions(id),
+    reference varchar(96) not null unique,
+    amount numeric(19,4) not null,
+    currency varchar(8) not null default 'USDT',
+    status varchar(24) not null default 'posted',
+    posted_by uuid references users(id),
+    posted_at timestamptz not null default now(),
+    created_at timestamptz not null default now()
+  );
+  create index if not exists weekly_bonus_transactions_ref_idx on weekly_bonus_transactions (reference);
+
+  create table if not exists notification_feed (
+    id uuid primary key default gen_random_uuid(),
+    category varchar(48) not null,
+    title varchar(160) not null,
+    body text not null default '',
+    audience varchar(16) not null default 'all' check (audience in ('all','members','winners','admins')),
+    competition_id uuid references weekly_competitions(id) on delete set null,
+    meta jsonb not null default '{}',
+    published boolean not null default false,
+    published_at timestamptz,
+    published_by uuid references users(id),
+    created_at timestamptz not null default now()
+  );
+  create index if not exists notification_feed_published_idx on notification_feed (published, published_at desc);
+
+  create table if not exists competition_audit_logs (
+    id uuid primary key default gen_random_uuid(),
+    competition_id uuid references weekly_competitions(id) on delete set null,
+    actor_id uuid references users(id),
+    action varchar(96) not null,
+    detail jsonb not null default '{}',
+    created_at timestamptz not null default now()
+  );
+  create index if not exists competition_audit_comp_idx on competition_audit_logs (competition_id, created_at desc);
+
+  alter table notifications add column if not exists category varchar(48);
+  alter table notifications add column if not exists link text;
+  alter table notifications add column if not exists meta jsonb not null default '{}';
+  `;
+  await pool.query(communityDdl);
+
   // USDT support (2026-10-16): ISO codes are 3 chars but 'USDT' needs 4.
   // Widen every currency/base/quote column to varchar(8), only if narrower.
   // MUST run AFTER the DDL above: on a fresh database the tables do not exist

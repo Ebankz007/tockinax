@@ -29,7 +29,8 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('content.manage','Edit CMS pages'),
     ('settings.manage','Change platform settings'),
     ('insurance.manage','Manage insurance policies and claims'),
-    ('token.manage','Manage token definitions and pricing')
+    ('token.manage','Manage token definitions and pricing'),
+    ('community.manage','Moderate testimonials, social submissions, weekly competitions and bonus awards')
     on conflict (key) do nothing`);
 
   // Grant all permissions to super_admin; scoped permissions to other roles
@@ -40,7 +41,7 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
   await pool.query(`
     insert into role_permissions (role_id, permission_id)
     select r.id, p.id from roles r, permissions p
-    where r.name='finance' and p.key in ('payouts.review','orders.review','content.manage','insurance.manage')
+    where r.name='finance' and p.key in ('payouts.review','orders.review','content.manage','insurance.manage','community.manage')
     on conflict (role_id, permission_id) do nothing`);
   await pool.query(`
     insert into role_permissions (role_id, permission_id)
@@ -92,7 +93,9 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('REV:insurance_premiums','REVENUE','USDT','Insurance premium revenue'),
     ('REV:insurance_reserve','REVENUE','USDT','Insurance claim reserve'),
     ('LIAB:insurance_claims','LIABILITY','USDT','Approved insurance claim liability pending payout'),
-    ('REV:settlement_fees','REVENUE','USDT','10% company-funded settlement charge on profit')
+    ('REV:settlement_fees','REVENUE','USDT','10% company-funded settlement charge on profit'),
+    ('EXP:community_bonuses','EXPENSE','USDT','Weekly community bonus expense (testimonial + referral competitions)'),
+    ('OPS:community_bonus_funding','ASSET','USDT','Documented funding pool for weekly community bonuses')
     on conflict (code) do nothing`);
 
   // ---- Token-marketplace pilot seeds (all DISABLED-by-default where financial) ----
@@ -135,7 +138,7 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('referral_gen3','Third-Generation Referral Reward','Generation 3 — $1 of each eligible $20 registration.',500,false)
     on conflict (id) do update set name=excluded.name, description=excluded.description, rate_bps=excluded.rate_bps`);
 
-  const pages = ['home','about','how-it-works','marketplace','fees','referrals','rewards','faq','contact','terms','privacy','refunds','market-rules'];
+  const pages = ['home','about','how-it-works','marketplace','fees','referrals','rewards','faq','contact','terms','privacy','refunds','market-rules','testimonials','community-rules'];
   for (const slug of pages) {
     await pool.query(`insert into content_pages (slug, title, body) values ($1,$2,$3) on conflict (slug) do nothing`,
       [slug, slug.replace(/-/g, ' ').toUpperCase(), `Admin-editable content for ${slug}. No investment claims permitted.`]);
@@ -169,8 +172,41 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('rewards_payouts', false, 'Company-funded reward payouts'),
     ('crypto_payouts', false, 'USDT/crypto transfers — needs network + legal + ops approval'),
     ('crypto_deposits', false, 'Crypto deposits'),
-    ('seller_open', true, 'Allow seller applications (still admin-approved per listing)')
+    ('seller_open', true, 'Allow seller applications (still admin-approved per listing)'),
+    ('community_rewards', true, 'Public testimonials, social promotion and weekly leaderboards'),
+    ('community_bonus_payouts', false, 'Weekly bonus ledger payouts — needs funded pool + admin approval')
     on conflict (key) do update set description=excluded.description`);
+
+  // ---- Community & weekly rewards seeds (all monetary values default to 0) ----
+  // Social media channels are NOT pre-populated with real-looking URLs: an admin
+  // must configure the official accounts in the dashboard (Community & Rewards
+  // Management -> Social Media). The table is empty on a fresh install until
+  // configured; no placeholder URLs are shipped as company accounts.
+  await pool.query(`insert into social_media_accounts (platform, label, url, enabled, sort_order) values
+    ('telegram','Telegram','',true,1),
+    ('youtube','YouTube','',true,2),
+    ('x','X (Twitter)','',true,3),
+    ('instagram','Instagram','',true,4),
+    ('facebook','Facebook','',true,5)
+    on conflict (platform) do nothing`);
+
+  // Bonus configuration is admin-editable; the seed only guarantees a row exists.
+  // Never overwrite an existing active configuration (an admin may have funded it).
+  await pool.query(`insert into weekly_bonus_configurations
+      (kind, active, pool_amount, currency, position_rewards, min_metric, approval_required,
+       notification_settings, timezone, start_dow, start_time, end_dow, end_time, eligibility)
+    values
+      ('testimonial', true, 0, 'USDT', '{"1":"0","2":"0","3":"0","4":"0","5":"0"}', 10, true,
+       '{"leaderboard_updates":true,"email":false,"public_amounts":true}', 'UTC', 1, '00:00', 0, '23:59',
+       '{"require_active":true,"require_verified_email":false,"require_approved_testimonial":true}'),
+      ('referral', true, 0, 'USDT', '{"1":"0","2":"0","3":"0","4":"0","5":"0"}', 1, true,
+       '{"leaderboard_updates":true,"email":false,"public_amounts":true}', 'UTC', 1, '00:00', 0, '23:59',
+       '{"require_active":true,"require_verified_email":false,"require_qualified_registration":true,"exclude_self":true}')
+    on conflict (kind) where active do nothing`);
+
+  await pool.query(`insert into system_settings (key, value) values
+    ('community_rewards', '{"view_dedup_hours":24,"view_trust_proxy":false,"suspicion_threshold":60,"max_video_mb":50,"max_image_mb":8,"max_video_seconds":120,"testimonial_min_views":10,"referral_min_qualified":1,"leaderboard_public":true}')
+    on conflict (key) do nothing`);
 
   console.log('[seed] done. All financial incentives ship DISABLED.');
   await pool.end();

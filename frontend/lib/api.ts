@@ -90,6 +90,31 @@ export const api = {
     req<T>(path, { method: 'DELETE' }),
 };
 
+/* ---------- Raw-bytes media upload ----------
+
+The backend accepts raw request bodies (no multipart/multer) and validates
+the file by magic bytes, so we POST the raw ArrayBuffer with a content-type
+header and an optional X-File-Name. Never set Content-Type on `req` here —
+that would break the binary body.
+*/
+export function uploadRaw(path: string, bytes: ArrayBuffer, contentType: string, fileName?: string): Promise<unknown> {
+  return fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': contentType,
+      ...(fileName ? { 'X-File-Name': encodeURIComponent(fileName) } : {}),
+    },
+    body: bytes,
+  }).then(async (res) => {
+    const text = await res.text();
+    let data: unknown = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) throw new ApiError(res.status, data);
+    return data;
+  });
+}
+
 /* ---------- Types ---------- */
 export type User = {
   id: string;
@@ -374,6 +399,130 @@ export type InsuranceClaim = {
   token_code?: string;
   coverage_amount?: string | number;
   user_email?: string;
+};
+
+/* ---------- Community & weekly rewards ---------- */
+
+export type Testimonial = {
+  id: string;
+  title: string;
+  body: string;
+  displayName: string;
+  country: string;
+  mediaType: 'video' | 'image' | 'written';
+  featured: boolean;
+  socialUrl: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  views: number;
+  media: TestimonialMedia[];
+};
+
+export type TestimonialMedia = {
+  id: string;
+  kind: 'video' | 'image';
+  mime: string;
+  bytes: number;
+  durationSeconds: number | null;
+  url: string;
+};
+
+export type TestimonialSubmit = {
+  title: string;
+  body: string;
+  displayName: string;
+  country: string;
+  socialUrl?: string | null;
+  mediaType: 'video' | 'image' | 'written';
+  consent: boolean;
+  policyAccepted: boolean;
+};
+
+export type SocialAccount = {
+  platform: string;
+  label: string;
+  url: string;
+  sortOrder: number;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  member: string;
+  referralCode: string | null;
+  testimonialId: string | null;
+  title: string | null;
+  country: string | null;
+  metric: number;
+  qualified: boolean;
+  awardStatus: string | null;
+  amount: string | undefined;
+  currency?: string;
+};
+
+export type CommunityLeaderboard = {
+  competition: {
+    id: string;
+    kind: string;
+    weekKey: string;
+    startsAt: string;
+    endsAt: string;
+    timezone: string;
+    status: string;
+    minMetric?: number;
+  };
+  rewards: { [position: string]: string } | undefined;
+  pool: string | undefined;
+  currency: string;
+  leaderboard: LeaderboardEntry[];
+};
+
+export type BonusAward = {
+  id: string;
+  kind: string;
+  position: number;
+  metricValue: number;
+  amount: string;
+  currency: string;
+  status: string;
+  paymentStatus: string;
+  disqualifyReason: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  weekKey: string;
+};
+
+export type BonusTransaction = {
+  id: string;
+  reference: string;
+  amount: string;
+  currency: string;
+  status: string;
+  postedAt: string | null;
+  ledgerTxId: string | null;
+};
+
+export type NotificationItem = {
+  id: string;
+  title?: string | null;
+  body?: string | null;
+  category?: string | null;
+  link?: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type BonusTotals = {
+  paid: string;
+  approvedPending: string;
+  provisional: string;
+};
+
+export type CommunityMeSummary = {
+  testimonials: { byStatus: Record<string, number>; total: number };
+  socialSubmissions: { byStatus: Record<string, number>; total: number };
+  verifiedViews: number;
+  unreadNotifications: number;
+  bonusPaid: string;
 };
 
 /* ---------- Module state ---------- */

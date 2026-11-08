@@ -3,6 +3,7 @@ import Link from 'next/link';
 import localFont from 'next/font/local';
 import Logo from '@/components/Logo';
 import { AuthHeader } from '@/components/AuthHeader';
+import { SocialAccount, SocialIcons } from '@/components/SocialIcons';
 import './globals.css';
 
 // Self-hosted variable fonts (SIL OFL 1.1 — see app/fonts/OFL.txt).
@@ -44,6 +45,7 @@ const PRIMARY_NAV: [string, string][] = [
   ['Stages', '/stages'],
   ['Marketplace', '/marketplace'],
   ['Fees', '/fees'],
+  ['Testimonials', '/testimonials'],
 ];
 
 const FOOTER_NAV: [string, string][] = [
@@ -54,6 +56,7 @@ const FOOTER_NAV: [string, string][] = [
   ['Marketplace', '/marketplace'],
   ['Referrals', '/referrals'],
   ['Rewards', '/rewards'],
+  ['Testimonials', '/testimonials'],
   ['Fees', '/fees'],
   ['Risk', '/risk'],
   ['Market rules', '/market-rules'],
@@ -65,7 +68,14 @@ const FOOTER_NAV: [string, string][] = [
   ['Admin', '/admin'],
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  let accounts: SocialAccount[] = [];
+  try {
+    accounts = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5070/api/v1'}/community/social-accounts`, {
+      cache: 'no-store',
+    }).then((r) => r.ok ? r.json() : []);
+  } catch { accounts = []; }
+
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <head>
@@ -98,6 +108,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
 
             <div className="ml-auto flex items-center gap-2">
+              <SocialIcons accounts={accounts} size={18} gap={2} />
               <AuthHeader />
             </div>
           </div>
@@ -127,6 +138,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </Link>
                 ))}
               </nav>
+              <div className="mt-4 sm:mt-0 text-sm">
+                <p className="text-xs uppercase tracking-wider text-mist mb-2">Follow TOCKINAX</p>
+                <SocialIcons accounts={accounts} size={20} gap={3} />
+              </div>
             </div>
 
             <div className="mt-8 rounded-xl border border-gold/25 bg-gold/[0.04] p-4">

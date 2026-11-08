@@ -41,5 +41,17 @@ module.exports = {
       out_file: '../logs/sweeper-out.log',
       time: true,
     },
+    {
+      name: 'tockinax-community-scheduler',
+      cwd: './backend',
+      script: 'src/workers/community-scheduler.cjs',
+      instances: 1,
+      exec_mode: 'fork',
+      cron_restart: '*/15 * * * *',
+      env_production: { NODE_ENV: 'production' },
+      error_file: '../logs/community-scheduler-err.log',
+      out_file: '../logs/community-scheduler-out.log',
+      time: true,
+    },
   ],
 };

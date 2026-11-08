@@ -18,6 +18,8 @@
     "test:live": "node live-smoke.cjs",
     "sweeper": "node src/workers/sweeper.cjs",
     "sweeper:once": "node src/workers/sweeper.cjs --once",
+    "community-scheduler": "node src/workers/community-scheduler.cjs",
+    "community-scheduler:once": "node src/workers/community-scheduler.cjs --once",
     "admin:create": "node src/scripts/admin-create.cjs"
   },
   "dependencies": {

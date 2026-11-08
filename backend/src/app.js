@@ -54,6 +54,10 @@ function buildApp() {
   app.use('/api/v1/referrals', require('./routes/v1.referrals'));
   app.use('/api/v1/rewards', require('./routes/v1.rewards'));
   app.use('/api/v1/payouts', require('./routes/v1.payouts'));
+  app.use('/api/v1/community', require('./routes/v1.community'));
+  // Must be mounted before the generic admin router (which gates everything
+  // under /api/v1/admin to super_admin).
+  app.use('/api/v1/admin/community', require('./routes/v1.community-admin'));
   app.use('/api/v1/admin/users', require('./routes/v1.admin-users'));
   app.use('/api/v1/admin', require('./routes/v1.admin'));
   app.use('/api/v1/disputes', require('./routes/v1.disputes'));
@@ -85,6 +89,8 @@ function buildApp() {
       '/api/v1/users': {}, '/api/v1/webhooks': {}, '/api/v1/finance': {},
       '/api/v1/tokens': {}, '/api/v1/tokenmarket': {}, '/api/v1/deposits': {},
       '/api/v1/withdrawals': {}, '/api/v1/pay2crypto-webhook': { note: 'signed provider callbacks only' },
+      '/api/v1/community': { note: 'public testimonials, social links, leaderboards, member submissions' },
+      '/api/v1/admin/community': { note: 'moderation, competitions, bonus configuration and payments' },
       '/api/v1/crypto': { note: '403 crypto_disabled' },
     },
   }));

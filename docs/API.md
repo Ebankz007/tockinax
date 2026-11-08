@@ -133,7 +133,69 @@ Record-only until `feature_flags.live_payments=true`. With live off, events are 
 | GET | `/finance/reconciliation` | — | `200 { runs[≤20], imbalances[] }` (must be empty) |
 | POST | `/finance/reconciliation/run` | — | `201 run { mismatches, report }` |
 
+## Community & weekly rewards — `/api/v1/community` (public + member)
+
+Public endpoints require no auth unless noted. All media is served through a
+controlled endpoint (range support); private storage paths are never exposed.
+
+| Method | Path | Auth | Body | Response |
+|---|---|---|---|---|
+| GET | `/community/testimonials`?media&country&featured&limit&offset | none | — | `200 { items: Testimonial[], total, limit, offset }` |
+| GET | `/community/testimonials/:id` | none | — | `200 Testimonial` · `404` |
+| POST | `/community/testimonials/:id/view` | optional | — | `200 { counted, duplicate, eligible, views, suspicion }` — server-side only, rate-limited 60/min |
+| GET | `/community/testimonials/:id/media/:mediaId` | optional | — | media bytes (206 range) · `404` |
+| GET | `/community/social-accounts` | none | — | `200 [{ platform, label, url, sortOrder }]` |
+| GET | `/community/leaderboards`?kind=testimonial\|referral | optional | — | `200 { testimonial?: { competition, leaderboard[] }, referral?: {...} }` |
+| GET | `/community/announcements` | none | — | `200 announcements[]` |
+| GET | `/community/rules` | none | — | `200 { page, competitions[], policy, disclosure }` |
+| GET | `/community/testimonials/mine` | member | — | `200 testimonials[]` (own, incl. media + views) |
+| POST | `/community/testimonials` | member | `{ title, body?, displayName, country:AA, socialUrl?, mediaType, consent:true, policyAccepted:true }` | `201 { id, ... }` |
+| PATCH | `/community/testimonials/:id` | member | same fields | `200` · `409 not_editable` (approved) |
+| DELETE | `/community/testimonials/:id` | member | — | `200 { ok }` · `404` |
+| POST | `/community/testimonials/:id/media` | member | raw bytes (mp4≤50MB/120s, image≤8MB) | `201 { id, kind, mime, bytes, durationSeconds, url }` |
+| GET | `/community/testimonials/:id/media` | member | — | `200 media[]` |
+| POST | `/community/social-submissions` | member | `{ platform, postUrl, caption? }` | `201` · `409 duplicate_submission` |
+| POST | `/community/social-submissions/:id/screenshot` | member | raw image ≤8MB | `200 { ok }` |
+| GET | `/community/social-submissions/mine` | member | — | `200 submissions[]` |
+| GET | `/community/leaderboards/mine` | member | — | `200 { testimonial: {...}, referral: {...} }` (own rank + board) |
+| GET | `/community/bonuses/mine` | member | — | `200 { awards[], transactions[], totals: { paid, approvedPending, provisional } }` |
+| GET | `/community/me/summary` | member | — | `200 { testimonials, socialSubmissions, verifiedViews, unreadNotifications, bonusPaid }` |
+
+## Community & Rewards Management — `/api/v1/admin/community` (auth + `community.manage` or `super_admin`)
+
+Mounted **before** `/api/v1/admin` so it is not subject to the blanket `super_admin` gate.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/admin/community/overview` | — | `200 { testimonials, socialSubmissions, competitions[], awards[] }` |
+| GET | `/admin/community/testimonials`?status&suspicious&limit&offset | — | `200 { items[], total, limit, offset }` |
+| GET | `/admin/community/testimonials/:id/views` | — | `200 { views[], daily[] }` — per-view eligibility/suspicion + daily rollup |
+| POST | `/admin/community/testimonials/:id/review` | `{ action: approve\|reject\|needs_correction\|feature\|unfeature\|unpublish\|suspect\|unsuspect, remarks?, reason? }` | `200 updated` · `409 consent_missing/not_editable` |
+| DELETE | `/admin/community/testimonials/:id` | — | `200 { ok }` |
+| GET | `/admin/community/social-accounts` | — | `200 accounts[]` |
+| PUT | `/admin/community/social-accounts` | `{ platform, label, url, enabled?, sortOrder? }` | `200 updated` |
+| GET | `/admin/community/social-submissions`?status&limit | — | `200 submissions[]` (with user email/member_no) |
+| GET | `/admin/community/social-submissions/:id/screenshot` | — | image bytes · `404` |
+| POST | `/admin/community/social-submissions/:id/verify` | `{ status: verified\|rejected\|needs_info, remarks?, method?: admin\|platform_api, detail? }` | `200 updated` |
+| GET | `/admin/community/competitions`?kind | — | `200 competitions[]` (with participants/awards counts) |
+| GET | `/admin/community/competitions/:id` | — | `200 { competition, participants[], awards[] }` |
+| POST | `/admin/community/competitions/:id/snapshot` | — | `200 { participants, top }` — live ranking snapshot |
+| POST | `/admin/community/competitions/:id/finalize` | — | `200 { competition, awards: provisional[] }` — idempotent |
+| POST | `/admin/community/competitions/:id/cancel` | `{ reason }` | `200 cancelled` |
+| GET | `/admin/community/bonus-config`?kind | — | `200 configs[]` |
+| PUT | `/admin/community/bonus-config/:kind` | `{ poolAmount, currency, positionRewards{1-5}, minMetric, approvalRequired, notificationSettings, timezone, start_dow/time, end_dow/time, eligibility }` | `200 config` — new versioned row; old deactivated |
+| GET | `/admin/community/awards`?kind&status&competition | — | `200 awards[]` (with week_key, member_no, tx reference) |
+| POST | `/admin/community/awards/:id/approve` | — | `200 { award, replayed }` |
+| POST | `/admin/community/awards/:id/disqualify` | `{ reason }` | `200 award` |
+| POST | `/admin/community/awards/:id/pay` | — | `200 { transaction, replayed }` — posts `EXP:community_bonuses`/`LIAB:sim_usdt`, idempotency key `community_bonus:<id>` |
+| GET | `/admin/community/bonus-transactions` | — | `200 transactions[]` |
+| GET | `/admin/community/announcements` | — | `200 announcements[]` |
+| POST | `/admin/community/announcements` | `{ category, title, body?, audience: all\|members\|winners\|admins, competitionId?, meta?, publish }` | `201 feed { delivered }` — publishes + notifies audience |
+| POST | `/admin/community/announcements/:id/publish` | — | `200 feed { delivered }` |
+| DELETE | `/admin/community/announcements/:id` | — | `200 { ok }` — unpublish |
+
 ## Admin — additions (auth + `super_admin`)
+
 
 | Method | Path | Response |
 |---|---|---|

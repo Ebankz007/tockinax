@@ -2,7 +2,7 @@
 // Money: numeric(19,4) + ISO currency. Ledger append-only (revoked in migration SQL).
 const {
   pgTable, uuid, text, varchar, integer, bigint, numeric, boolean,
-  timestamp, jsonb, pgEnum, uniqueIndex, index, check, primaryKey,
+  timestamp, jsonb, pgEnum, uniqueIndex, index, check, primaryKey, time,
 } = require('drizzle-orm/pg-core');
 const { sql } = require('drizzle-orm');
 
@@ -577,6 +577,233 @@ const passwordResets = pgTable('password_resets', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('password_resets_user_idx').on(t.userId)]);
 
+// ---- Community engagement & weekly rewards ----
+const testimonials = pgTable('testimonials', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 160 }).notNull(),
+  body: text('body').notNull().default(''),
+  displayName: varchar('display_name', { length: 120 }).notNull(),
+  country: varchar('country', { length: 2 }).notNull().default('NG'),
+  socialUrl: text('social_url'),
+  mediaType: varchar('media_type', { length: 16 }).notNull().default('written'),
+  status: varchar('status', { length: 24 }).notNull().default('pending'),
+  featured: boolean('featured').notNull().default(false),
+  suspicious: boolean('suspicious').notNull().default(false),
+  suspiciousReason: text('suspicious_reason'),
+  consent: boolean('consent').notNull().default(false),
+  policyAccepted: boolean('policy_accepted').notNull().default(false),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  adminRemarks: text('admin_remarks'),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('testimonials_user_idx').on(t.userId),
+  index('testimonials_status_idx').on(t.status),
+  index('testimonials_public_idx').on(t.status, t.publishedAt),
+]);
+
+const testimonialMedia = pgTable('testimonial_media', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  testimonialId: uuid('testimonial_id').notNull().references(() => testimonials.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 8 }).notNull(),
+  storageKey: text('storage_key').notNull(),
+  mime: varchar('mime', { length: 64 }).notNull().default('application/octet-stream'),
+  bytes: integer('bytes').notNull().default(0),
+  originalName: text('original_name'),
+  durationSeconds: numeric('duration_seconds', { precision: 10, scale: 2 }),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('testimonial_media_testimonial_idx').on(t.testimonialId)]);
+
+const testimonialViews = pgTable('testimonial_views', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  testimonialId: uuid('testimonial_id').notNull().references(() => testimonials.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  viewerHash: varchar('viewer_hash', { length: 64 }).notNull(),
+  ipHash: varchar('ip_hash', { length: 64 }),
+  uaHash: varchar('ua_hash', { length: 64 }),
+  bucket: timestamp('bucket', { withTimezone: true }).notNull(),
+  eligible: boolean('eligible').notNull().default(true),
+  suspicionScore: integer('suspicion_score').notNull().default(0),
+  reason: varchar('reason', { length: 96 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('testimonial_views_unique_idx').on(t.testimonialId, t.viewerHash, t.bucket),
+  index('testimonial_views_testimonial_idx').on(t.testimonialId, t.createdAt),
+  index('testimonial_views_eligible_idx').on(t.testimonialId, t.eligible),
+]);
+
+const socialMediaAccounts = pgTable('social_media_accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platform: varchar('platform', { length: 32 }).notNull().unique(),
+  label: varchar('label', { length: 80 }).notNull().default(''),
+  url: text('url').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+const socialMediaSubmissions = pgTable('social_media_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  platform: varchar('platform', { length: 32 }).notNull(),
+  postUrl: text('post_url').notNull(),
+  caption: text('caption'),
+  screenshotKey: text('screenshot_key'),
+  status: varchar('status', { length: 24 }).notNull().default('pending'),
+  verificationMethod: varchar('verification_method', { length: 24 }),
+  verificationRef: text('verification_ref'),
+  adminRemarks: text('admin_remarks'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('social_submissions_user_idx').on(t.userId),
+  index('social_submissions_status_idx').on(t.status),
+  uniqueIndex('social_submissions_user_url_uidx').on(t.userId, t.postUrl),
+]);
+
+const socialMediaVerifications = pgTable('social_media_verifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id').notNull().references(() => socialMediaSubmissions.id, { onDelete: 'cascade' }),
+  method: varchar('method', { length: 24 }).notNull().default('admin'),
+  status: varchar('status', { length: 24 }).notNull(),
+  detail: jsonb('detail').notNull().default({}),
+  verifiedBy: uuid('verified_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('social_verifications_submission_idx').on(t.submissionId)]);
+
+const weeklyCompetitions = pgTable('weekly_competitions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: varchar('kind', { length: 16 }).notNull(),
+  weekKey: varchar('week_key', { length: 16 }).notNull(),
+  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+  endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+  timezone: varchar('timezone', { length: 48 }).notNull().default('UTC'),
+  status: varchar('status', { length: 24 }).notNull().default('open'),
+  config: jsonb('config').notNull().default({}),
+  finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('weekly_competitions_kind_week_uidx').on(t.kind, t.weekKey),
+  index('weekly_competitions_status_idx').on(t.status, t.endsAt),
+]);
+
+const competitionParticipants = pgTable('competition_participants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  competitionId: uuid('competition_id').notNull().references(() => weeklyCompetitions.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  testimonialId: uuid('testimonial_id').references(() => testimonials.id, { onDelete: 'set null' }),
+  metricValue: integer('metric_value').notNull().default(0),
+  qualified: boolean('qualified').notNull().default(false),
+  qualificationReason: text('qualification_reason'),
+  rank: integer('rank'),
+  snapshotAt: timestamp('snapshot_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('competition_participants_comp_idx').on(t.competitionId, t.rank),
+  index('competition_participants_user_idx').on(t.userId),
+]);
+
+const competitionLeaderboards = pgTable('competition_leaderboards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  competitionId: uuid('competition_id').notNull().references(() => weeklyCompetitions.id, { onDelete: 'cascade' }),
+  rank: integer('rank').notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  testimonialId: uuid('testimonial_id').references(() => testimonials.id, { onDelete: 'set null' }),
+  metricValue: integer('metric_value').notNull().default(0),
+  qualified: boolean('qualified').notNull().default(true),
+  awardId: uuid('award_id'),
+  snapshot: jsonb('snapshot').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('competition_leaderboards_comp_rank_uidx').on(t.competitionId, t.rank)]);
+
+const weeklyBonusConfigurations = pgTable('weekly_bonus_configurations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  kind: varchar('kind', { length: 16 }).notNull(),
+  active: boolean('active').notNull().default(true),
+  poolAmount: numeric('pool_amount', { precision: 19, scale: 4 }).notNull().default('0'),
+  currency: varchar('currency', { length: 8 }).notNull().default('USDT'),
+  positionRewards: jsonb('position_rewards').notNull().default({}),
+  minMetric: integer('min_metric').notNull().default(0),
+  approvalRequired: boolean('approval_required').notNull().default(true),
+  notificationSettings: jsonb('notification_settings').notNull().default({}),
+  timezone: varchar('timezone', { length: 48 }).notNull().default('UTC'),
+  startDow: integer('start_dow').notNull().default(1),
+  startTime: time('start_time').notNull().default('00:00'),
+  endDow: integer('end_dow').notNull().default(0),
+  endTime: time('end_time').notNull().default('23:59'),
+  eligibility: jsonb('eligibility').notNull().default({}),
+  effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+const weeklyBonusAwards = pgTable('weekly_bonus_awards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  competitionId: uuid('competition_id').notNull().references(() => weeklyCompetitions.id, { onDelete: 'cascade' }),
+  kind: varchar('kind', { length: 16 }).notNull(),
+  position: integer('position').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  testimonialId: uuid('testimonial_id').references(() => testimonials.id, { onDelete: 'set null' }),
+  metricValue: integer('metric_value').notNull().default(0),
+  amount: numeric('amount', { precision: 19, scale: 4 }).notNull().default('0'),
+  currency: varchar('currency', { length: 8 }).notNull().default('USDT'),
+  status: varchar('status', { length: 24 }).notNull().default('provisional'),
+  approvedBy: uuid('approved_by').references(() => users.id),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  disqualifyReason: text('disqualify_reason'),
+  paymentStatus: varchar('payment_status', { length: 24 }).notNull().default('unpaid'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('weekly_bonus_awards_comp_pos_uidx').on(t.competitionId, t.position),
+  index('weekly_bonus_awards_user_idx').on(t.userId, t.createdAt),
+  index('weekly_bonus_awards_status_idx').on(t.status),
+]);
+
+const weeklyBonusTransactions = pgTable('weekly_bonus_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  awardId: uuid('award_id').notNull().references(() => weeklyBonusAwards.id, { onDelete: 'restrict' }).unique(),
+  ledgerTxId: uuid('ledger_tx_id').references(() => ledgerTransactions.id),
+  reference: varchar('reference', { length: 96 }).notNull().unique(),
+  amount: numeric('amount', { precision: 19, scale: 4 }).notNull(),
+  currency: varchar('currency', { length: 8 }).notNull().default('USDT'),
+  status: varchar('status', { length: 24 }).notNull().default('posted'),
+  postedBy: uuid('posted_by').references(() => users.id),
+  postedAt: timestamp('posted_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('weekly_bonus_transactions_ref_idx').on(t.reference)]);
+
+const notificationFeed = pgTable('notification_feed', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  category: varchar('category', { length: 48 }).notNull(),
+  title: varchar('title', { length: 160 }).notNull(),
+  body: text('body').notNull().default(''),
+  audience: varchar('audience', { length: 16 }).notNull().default('all'),
+  competitionId: uuid('competition_id').references(() => weeklyCompetitions.id, { onDelete: 'set null' }),
+  meta: jsonb('meta').notNull().default({}),
+  published: boolean('published').notNull().default(false),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  publishedBy: uuid('published_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('notification_feed_published_idx').on(t.published, t.publishedAt)]);
+
+const competitionAuditLogs = pgTable('competition_audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  competitionId: uuid('competition_id').references(() => weeklyCompetitions.id, { onDelete: 'set null' }),
+  actorId: uuid('actor_id').references(() => users.id),
+  action: varchar('action', { length: 96 }).notNull(),
+  detail: jsonb('detail').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('competition_audit_comp_idx').on(t.competitionId, t.createdAt)]);
+
 module.exports = {
   users, userProfiles, roles, permissions, rolePermissions, userRoles, userSessions,
   identityChecks, consentRecords, serviceFees, servicePayments,
@@ -593,4 +820,9 @@ module.exports = {
   commissionCategories,
   insurancePolicies, insuranceClaims,
   passwordResets,
+  testimonials, testimonialMedia, testimonialViews,
+  socialMediaAccounts, socialMediaSubmissions, socialMediaVerifications,
+  weeklyCompetitions, competitionParticipants, competitionLeaderboards,
+  weeklyBonusConfigurations, weeklyBonusAwards, weeklyBonusTransactions,
+  notificationFeed, competitionAuditLogs,
 };

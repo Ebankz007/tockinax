@@ -94,6 +94,7 @@ function AdminInner() {
       <Link href="/admin/content" className="btn-secondary">Content</Link>
       <Link href="/admin/users" className="btn-secondary">Users</Link>
       <Link href="/admin/roles" className="btn-secondary">Roles & permissions</Link>
+      <Link href="/admin/community" className="btn-secondary">Community &amp; Rewards</Link>
       <Link href="/change-password" className="btn-secondary">Change password</Link>
       <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>
     </nav>
