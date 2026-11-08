@@ -89,7 +89,7 @@ Compound math is NEVER used — see `tests/token.test.js` simple-not-compound pr
 |---|---|---|---|---|---|
 | 1 | Entry | 50 | 500 | 20 (registration) | 1 |
 | 2 | Growth | 500.01 | 2,000 | 25 | 2 |
-| 3 | Advancement | 2,000.01 | 5,000 | 50 | 3 |
+| 3 | Advanced | 2,000.01 | 5,000 | 50 | 3 |
 | 4 | Premium | 5,000.01 | 50,000 | 100 | 3 |
 | 5 | Elite | 50,000.01 | 100,000 | 250 | 3 |
 
