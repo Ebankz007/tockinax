@@ -30,7 +30,7 @@ const router = express.Router();
 router.use(authRequired);
 
 const PURPOSES = ['registration_fee', 'token_purchase', 'stage_upgrade', 'stage_renewal'];
-const NETWORK_DISPLAY = 'USDT — TRON/TRC20 ONLY';
+const NETWORK_DISPLAY = 'USDT (TRC20 or BEP20)';
 
 function isSandboxMode() {
   return (process.env.PAY2CRYPTO_SANDBOX || 'true').toLowerCase() !== 'false';
@@ -145,10 +145,10 @@ router.post('/intent', async (req, res, next) => {
       intent: updated.rows[0],
       pay: {
         address: invoice.payAddress,
-        qrPayload: invoice.payAddress ? `tron:${invoice.payAddress}?amount=${v.amount}&asset=USDT` : null,
+        qrPayload: invoice.payAddress ? `${invoice.network === 'BEP20' ? 'ethereum' : 'tron'}:${invoice.payAddress}?amount=${v.amount}&asset=USDT` : null,
         amount: v.amount,
         currency: 'USDT',
-        network: 'TRC20',
+        network: invoice.network,
         networkDisplay: NETWORK_DISPLAY,
       },
       sandbox: sandboxMode,

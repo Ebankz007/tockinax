@@ -126,6 +126,7 @@ function DashboardInner() {
       <Link href="/dashboard/payouts" className="btn-secondary">Payouts</Link>
       <Link href="/dashboard/community" className="btn-secondary">Community &amp; Rewards</Link>
       <Link href="/dashboard/wallet" className="btn-secondary">Wallet</Link>
+      <Link href="/dashboard/payments" className="btn-secondary">Payments</Link>
       <Link href="/dashboard/support" className="btn-secondary">Support</Link>
       <Link href="/change-password" className="btn-secondary">Change password</Link>
       <button onClick={handleLogout} className="btn-danger text-sm" aria-label="Logout">Logout</button>

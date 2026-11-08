@@ -9,7 +9,7 @@ const QA: [string, string][] = [
   ['When is an order completed?', 'Only after the seller confirms receipt or an admin completes manual review. Unconfirmed orders may move to dispute.'],
   ['How do disputes work?', 'Either party can dispute from the order thread or support page. Provide references and dates. Admins review and decide: complete or keep disputed.'],
   ['When do referral commissions pay?', 'Commissions follow the approved plan categories and rates (see Referrals) and pay only on verified sales after approval and funding. Eligible completed sales count after a confirmation period. Registration fees, deposits and transfers never qualify.'],
-  ['What are the referral rates?', 'The approved plan has three referral generations. Each eligible $20 registration allocates $5 to the direct referrer, $2 to the second generation and $1 to the third generation. Rewards pay only after approval and funding (see Referrals).'],
+  ['What are the referral rates?', 'The approved plan has three referral generations. Referral rewards pay only after approval and funding (see Referrals).'],
   ['Are rewards guaranteed income?', 'No. Activity rewards are disabled until budget + funding + approval, and they are never returns on deposits. There are no profit claims anywhere on this platform.'],
   ['How do payouts work?', 'Request payouts only from eligible, confirmed balances (payable commissions/rewards). Requests go through review before release. USDT TRC20 only via Pay2Crypto sandbox until approvals.'],
   ['Which payment methods are approved?', 'Fiat methods listed at checkout (for example bank transfer). USDT TRC20 only via Pay2Crypto sandbox until approvals.'],

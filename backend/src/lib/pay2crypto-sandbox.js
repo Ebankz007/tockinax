@@ -51,18 +51,29 @@ function fakeTronAddress(seed) {
   return s;
 }
 
+// Deterministic-ish fake BEP20 address (starts with 0x, 40 hex chars).
+function fakeBep20Address(seed) {
+  const h = crypto.createHash('sha256').update(String(seed)).digest();
+  let s = '0x';
+  for (let i = 0; i < 40; i++) s += '0123456789abcdef'[h[i % h.length] % 16];
+  return s;
+}
+
+function fakeAddress(network, seed) {
+  return network === 'BEP20' ? fakeBep20Address(seed) : fakeTronAddress(seed);
+}
+
 const store = new Map(); // invoiceId -> record (in-memory only; process-local)
 
-function createInvoice({ amountUsdt, orderId }) {
+function createInvoice({ amountUsdt, orderId, network = 'TRC20' }) {
   guardSandbox();
-  const network = 'TRC20';
   const invoiceId = `sandbox-inv-${crypto.randomBytes(8).toString('hex')}`;
   const rec = {
     invoiceId,
     orderId: String(orderId),
     amount: String(amountUsdt),
     network,
-    payAddress: fakeTronAddress(invoiceId),
+    payAddress: fakeAddress(network, invoiceId),
     status: 'pending',
     txHash: null,
     sandbox: true,
@@ -104,7 +115,7 @@ function simulatePay(invoiceId, overrides) {
     order_id: rec.orderId,
     amount: rec.amount,
     currency: 'USDT',
-    network: 'TRC20',
+    network: rec.network,
     status: 'paid',
     tx_hash: rec.txHash,
     sandbox: true,

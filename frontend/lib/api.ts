@@ -525,6 +525,62 @@ export type CommunityMeSummary = {
   bonusPaid: string;
 };
 
+/* ---------- Pay2Crypto payments ---------- */
+
+export type ActivationPayment = {
+  id: string;
+  amount: string;
+  currency: string;
+  network: string;
+  status: string;
+  sandbox: boolean;
+  pay_address: string | null;
+  provider_invoice_id: string | null;
+  tx_hash: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+};
+
+export type UpgradePayment = {
+  id: string;
+  from_stage: number;
+  to_stage: number;
+  fee_amount: string;
+  currency: string;
+  network: string;
+  status: string;
+  sandbox: boolean;
+  pay_address: string | null;
+  provider_invoice_id: string | null;
+  tx_hash: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+};
+
+export type PaymentConfirmation = {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  order_id: string | null;
+  amount: string;
+  currency: string;
+  network: string;
+  status: string;
+  proof_tx_hash: string | null;
+  proof_screenshot_key: string | null;
+  seller_confirmed_at: string | null;
+  dispute_reason: string | null;
+  created_at: string;
+  my_role: 'buyer' | 'seller';
+  order_no: string | null;
+  counterparty_email: string | null;
+};
+
+export type WalletAddresses = {
+  trc20: string | null;
+  bep20: string | null;
+};
+
 /* ---------- Module state ---------- */
 
 export type ModuleState<T> =

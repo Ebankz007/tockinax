@@ -80,18 +80,32 @@ router.post('/pay2crypto', async (req, res, next) => {
       console.warn('[pay2crypto-webhook] no invoice id in event', v.eventId);
       return res.status(404).json({ error: 'intent_not_found' });
     }
-    const q = await pool.query(`select * from deposit_intents where provider_invoice_id=$1`, [v.invoiceId]);
-    if (!q.rowCount) {
+
+    // Look up the invoice across all payment intent tables.
+    let intent = null;
+    let intentType = null; // 'deposit' | 'activation' | 'upgrade'
+
+    const d = await pool.query(`select * from deposit_intents where provider_invoice_id=$1`, [v.invoiceId]);
+    if (d.rowCount) { intent = d.rows[0]; intentType = 'deposit'; }
+    else {
+      const a = await pool.query(`select * from activation_payments where provider_invoice_id=$1`, [v.invoiceId]);
+      if (a.rowCount) { intent = a.rows[0]; intentType = 'activation'; }
+      else {
+        const u = await pool.query(`select * from upgrade_payments where provider_invoice_id=$1`, [v.invoiceId]);
+        if (u.rowCount) { intent = u.rows[0]; intentType = 'upgrade'; }
+      }
+    }
+
+    if (!intent) {
       console.warn('[pay2crypto-webhook] unknown invoice', v.invoiceId);
       return res.status(404).json({ error: 'intent_not_found' });
     }
-    const intent = q.rows[0];
     if (intent.status === 'confirmed') {
       await pool.query(
         `update payment_provider_events set processed_at=now() where provider='pay2crypto' and event_id=$1`,
         [v.eventId]
       ).catch(() => {});
-      return res.json({ ok: true, duplicate: true, status: 'confirmed' });
+      return res.json({ ok: true, duplicate: true, status: 'confirmed', type: intentType });
     }
 
     // Determine authoritative status/amount. Live: re-fetch from API first.
@@ -110,12 +124,12 @@ router.post('/pay2crypto', async (req, res, next) => {
       }
     } else if (intent.sandbox !== true && intent.sandbox !== 1 && intent.sandbox !== 't') {
       // Sandbox-signed callback for a live intent: refuse to credit.
-      await pool.query(`update deposit_intents set status='failed', updated_at=now() where id=$1`, [intent.id]);
+      await pool.query(`update ${intentType === 'deposit' ? 'deposit_intents' : intentType === 'activation' ? 'activation_payments' : 'upgrade_payments'} set status='failed', updated_at=now() where id=$1`, [intent.id]);
       await pool.query(
         `insert into fraud_risk_events (kind, user_id, detail) values ('sandbox_callback_for_live_intent',$1,$2)`,
         [intent.user_id, { intent_id: intent.id, event_id: v.eventId }]
       );
-      await audit(pool, null, req.ip, 'deposit.sandbox_for_live', intent.id, { eventId: v.eventId });
+      await audit(pool, null, req.ip, `${intentType}.sandbox_for_live`, intent.id, { eventId: v.eventId });
       return res.status(409).json({ error: 'sandbox_live_mismatch' });
     }
 
@@ -125,48 +139,103 @@ router.post('/pay2crypto', async (req, res, next) => {
         const got = new Decimal(String(amount));
         const want = new Decimal(intent.amount);
         if (!got.equals(want)) {
-          await pool.query(`update deposit_intents set status='failed', tx_hash=$1, updated_at=now() where id=$2`, [
+          await pool.query(`update ${intentType === 'deposit' ? 'deposit_intents' : intentType === 'activation' ? 'activation_payments' : 'upgrade_payments'} set status='failed', tx_hash=$1, updated_at=now() where id=$2`, [
             txHash || null,
             intent.id,
           ]);
           await pool.query(
-            `insert into fraud_risk_events (kind, user_id, detail) values ('deposit_amount_mismatch',$1,$2)`,
+            `insert into fraud_risk_events (kind, user_id, detail) values ('${intentType}_amount_mismatch',$1,$2)`,
             [intent.user_id, { intent_id: intent.id, expected: want.toString(), received: got.toString(), event_id: v.eventId }]
           );
-          await audit(pool, null, req.ip, 'deposit.amount_mismatch', intent.id, { expected: want.toString(), received: got.toString() });
+          await audit(pool, null, req.ip, `${intentType}.amount_mismatch`, intent.id, { expected: want.toString(), received: got.toString() });
           return res.status(200).json({ ok: true, status: 'failed', reason: 'amount_mismatch' });
         }
       }
-      try {
-        const posted = await confirmDepositIntent(pool, intent, txHash);
-        await pool.query(
-          `update payment_provider_events set processed_at=now() where provider='pay2crypto' and event_id=$1`,
-          [v.eventId]
-        ).catch(() => {});
-        await audit(pool, null, req.ip, 'deposit.confirmed', intent.id, {
-          eventId: v.eventId,
-          txHash: txHash || null,
-          replayed: posted.replayed,
-          sandbox: !!intent.sandbox,
-        });
-        return res.json({ ok: true, status: 'confirmed', replayed: posted.replayed, sandbox: !!intent.sandbox });
-      } catch (e) {
-        console.error('[pay2crypto-webhook] ledger failed:', e.message);
-        return res.status(502).json({ error: 'ledger_error', message: e.message });
+
+      if (intentType === 'deposit') {
+        try {
+          const posted = await confirmDepositIntent(pool, intent, txHash);
+          await pool.query(
+            `update payment_provider_events set processed_at=now() where provider='pay2crypto' and event_id=$1`,
+            [v.eventId]
+          ).catch(() => {});
+          await audit(pool, null, req.ip, 'deposit.confirmed', intent.id, {
+            eventId: v.eventId,
+            txHash: txHash || null,
+            replayed: posted.replayed,
+            sandbox: !!intent.sandbox,
+          });
+          return res.json({ ok: true, status: 'confirmed', replayed: posted.replayed, sandbox: !!intent.sandbox, type: 'deposit' });
+        } catch (e) {
+          console.error('[pay2crypto-webhook] ledger failed:', e.message);
+          return res.status(502).json({ error: 'ledger_error', message: e.message });
+        }
       }
+
+      // Activation payment: confirm + activate user account.
+      if (intentType === 'activation') {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(`update activation_payments set status='confirmed', tx_hash=coalesce($1, tx_hash), confirmed_at=now(), updated_at=now() where id=$2`, [txHash || null, intent.id]);
+          await client.query(`update users set status='active', updated_at=now() where id=$1 and status='pending_verification'`, [intent.user_id]);
+          await client.query(
+            `insert into audit_logs (actor_id, action, target_type, target_id, diff, ip)
+             values (null,'activation.payment_confirmed','user',$1,$2,$3)`,
+            [intent.id, { txHash: txHash || null, sandbox: !!intent.sandbox }, req.ip]
+          );
+          await client.query(`update payment_provider_events set processed_at=now() where provider='pay2crypto' and event_id=$1`, [v.eventId]).catch(() => {});
+          await client.query('COMMIT');
+          return res.json({ ok: true, status: 'confirmed', type: 'activation', userId: intent.user_id, sandbox: !!intent.sandbox });
+        } catch (e) {
+          try { await client.query('ROLLBACK'); } catch {}
+          console.error('[pay2crypto-webhook] activation confirm failed:', e.message);
+          return res.status(502).json({ error: 'ledger_error', message: e.message });
+        } finally { client.release(); }
+      }
+
+      // Upgrade payment: confirm + apply stage upgrade.
+      if (intentType === 'upgrade') {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(`update upgrade_payments set status='confirmed', tx_hash=coalesce($1, tx_hash), confirmed_at=now(), updated_at=now() where id=$2`, [txHash || null, intent.id]);
+          await client.query(`update users set stage=$2, updated_at=now() where id=$1`, [intent.user_id, intent.to_stage]);
+          await client.query(
+            `insert into stage_history (user_id, from_stage, to_stage, kind, created_by)
+             values ($1,$2,$3,'upgrade',$1)`,
+            [intent.user_id, intent.from_stage, intent.to_stage]
+          );
+          await client.query(
+            `insert into audit_logs (actor_id, action, target_type, target_id, diff, ip)
+             values (null,'upgrade.payment_confirmed','user',$1,$2,$3)`,
+            [intent.id, { fromStage: intent.from_stage, toStage: intent.to_stage, txHash: txHash || null, sandbox: !!intent.sandbox }, req.ip]
+          );
+          await client.query(`update payment_provider_events set processed_at=now() where provider='pay2crypto' and event_id=$1`, [v.eventId]).catch(() => {});
+          await client.query('COMMIT');
+          return res.json({ ok: true, status: 'confirmed', type: 'upgrade', userId: intent.user_id, fromStage: intent.from_stage, toStage: intent.to_stage, sandbox: !!intent.sandbox });
+        } catch (e) {
+          try { await client.query('ROLLBACK'); } catch {}
+          console.error('[pay2crypto-webhook] upgrade confirm failed:', e.message);
+          return res.status(502).json({ error: 'ledger_error', message: e.message });
+        } finally { client.release(); }
+      }
+
+      // Should not reach here (only deposit/activation/upgrade exist).
+      return res.status(500).json({ error: 'unknown_intent_type' });
     }
 
     if (p2c.isFailedStatus(status)) {
-      await pool.query(`update deposit_intents set status=$1, updated_at=now() where id=$2`, [status, intent.id]);
-      await audit(pool, null, req.ip, 'deposit.terminal', intent.id, { status, eventId: v.eventId });
-      return res.json({ ok: true, status });
+      await pool.query(`update ${intentType === 'deposit' ? 'deposit_intents' : intentType === 'activation' ? 'activation_payments' : 'upgrade_payments'} set status=$1, updated_at=now() where id=$2`, [status, intent.id]);
+      await audit(pool, null, req.ip, `${intentType}.terminal`, intent.id, { status, eventId: v.eventId });
+      return res.json({ ok: true, status, type: intentType });
     }
 
     // Pending/confirming: record intent state, wait for the paid callback.
     if (intent.status !== 'pending' || !intent.tx_hash) {
-      await pool.query(`update deposit_intents set status='pending', updated_at=now() where id=$1`, [intent.id]);
+      await pool.query(`update ${intentType === 'deposit' ? 'deposit_intents' : intentType === 'activation' ? 'activation_payments' : 'upgrade_payments'} set status='pending', updated_at=now() where id=$1`, [intent.id]);
     }
-    return res.json({ ok: true, status: 'pending' });
+    return res.json({ ok: true, status: 'pending', type: intentType });
   } catch (e) {
     next(e);
   }

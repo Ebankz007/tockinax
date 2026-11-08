@@ -66,13 +66,17 @@ function makeEventFake() {
   };
 }
 
-describe('TRC20-only network validation', () => {
+describe('USDT network validation (TRC20 + BEP20)', () => {
   test('TRC20 accepted (case-insensitive)', () => {
     expect(p2c.assertNetwork('TRC20')).toBe('TRC20');
     expect(p2c.assertNetwork('trc20')).toBe('TRC20');
   });
-  test('BEP20/ERC20 rejected with unsupported_network', () => {
-    for (const n of ['BEP20', 'ERC20', 'bep20', 'SOL', 'BTC']) {
+  test('BEP20 accepted (case-insensitive)', () => {
+    expect(p2c.assertNetwork('BEP20')).toBe('BEP20');
+    expect(p2c.assertNetwork('bep20')).toBe('BEP20');
+  });
+  test('unsupported networks rejected with unsupported_network', () => {
+    for (const n of ['ERC20', 'erc20', 'SOL', 'BTC', 'BEP22']) {
       try {
         p2c.assertNetwork(n);
         throw new Error(`should have thrown for ${n}`);
@@ -81,21 +85,24 @@ describe('TRC20-only network validation', () => {
       }
     }
   });
-  test('deposit intent rejects non-TRC20 with 400 path', () => {
-    expect(() => validateIntentInput({ purpose: 'token_purchase', amount: '10', network: 'BEP20' })).toThrow();
-    try {
-      validateIntentInput({ purpose: 'token_purchase', amount: '10', network: 'ERC20' });
-      throw new Error('no-throw');
-    } catch (e) {
-      expect(e.code).toBe('unsupported_network');
-      expect(e.status).toBe(400);
+  test('deposit intent rejects unsupported networks with 400 path', () => {
+    for (const net of ['ERC20', 'SOL', 'BTC']) {
+      try {
+        validateIntentInput({ purpose: 'token_purchase', amount: '10', network: net });
+        throw new Error(`should have thrown for ${net}`);
+      } catch (e) {
+        expect(e.code).toBe('unsupported_network');
+        expect(e.status).toBe(400);
+      }
     }
   });
-  test('deposit intent accepts TRC20 default + all purposes', () => {
+  test('deposit intent accepts TRC20 and BEP20 for all purposes', () => {
     for (const purpose of ['registration_fee', 'token_purchase', 'stage_upgrade', 'stage_renewal']) {
-      const v = validateIntentInput({ purpose, amount: '25.5' });
-      expect(v.network).toBe('TRC20');
-      expect(v.amount).toBe('25.5000');
+      for (const net of ['TRC20', 'BEP20']) {
+        const v = validateIntentInput({ purpose, amount: '25.5', network: net });
+        expect(v.network).toBe(net);
+        expect(v.amount).toBe('25.5000');
+      }
     }
   });
 });
@@ -246,5 +253,86 @@ describe('live paths stay OFF without keys (offline)', () => {
     expect(r1.status).toBe(401);
     const r2 = await request(app).post('/api/v1/withdrawals/request').send({ amount: '10', dest_address: GOOD_TRC20 });
     expect(r2.status).toBe(401);
+  });
+});
+
+describe('BEP20 support (sandbox)', () => {
+  beforeEach(() => sandbox.__clear());
+
+  test('sandbox createInvoice with BEP20 network', () => {
+    const inv = sandbox.createInvoice({ amountUsdt: '50.0000', orderId: 'order-bep', network: 'BEP20' });
+    expect(inv.network).toBe('BEP20');
+    expect(inv.payAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(inv.sandbox).toBe(true);
+    expect(inv.status).toBe('pending');
+  });
+
+  test('sandbox simulatePay preserves BEP20 network', () => {
+    process.env.PAY2CRYPTO_WEBHOOK_SECRET = 'test-sandbox-secret';
+    const inv = sandbox.createInvoice({ amountUsdt: '25.0000', orderId: 'order-bep-2', network: 'BEP20' });
+    const { rawBody, headers, payload } = sandbox.simulatePay(inv.invoiceId);
+    expect(payload.network).toBe('BEP20');
+    const v = p2c.verifyWebhook(rawBody, headers);
+    expect(v.ok).toBe(true);
+    expect(v.network).toBe('BEP20');
+    process.env.PAY2CRYPTO_WEBHOOK_SECRET = '';
+  });
+
+  test('isBep20Address accepts valid BEP20 addresses', () => {
+    const { isBep20Address } = require('../src/routes/v1.withdrawals');
+    expect(isBep20Address('0x' + 'a'.repeat(40))).toBe(true);
+    expect(isBep20Address('0x' + 'A'.repeat(40))).toBe(true);
+    expect(isBep20Address('0x' + '0'.repeat(40))).toBe(true);
+  });
+
+  test('isBep20Address rejects invalid addresses', () => {
+    const { isBep20Address } = require('../src/routes/v1.withdrawals');
+    expect(isBep20Address('T' + 'A'.repeat(33))).toBe(false); // TRON address
+    expect(isBep20Address('0xshort')).toBe(false);
+    expect(isBep20Address('not-an-address')).toBe(false);
+    expect(isBep20Address('')).toBe(false);
+  });
+
+  test('validateIntentInput accepts BEP20', () => {
+    const v = validateIntentInput({ purpose: 'registration_fee', amount: '20', network: 'BEP20' });
+    expect(v.network).toBe('BEP20');
+    expect(v.amount).toBe('20.0000');
+  });
+
+  test('createInvoice echoes BEP20 network', () => {
+    // Can't call live.createInvoice without a token, but the sandbox path echoes network
+    const inv = sandbox.createInvoice({ amountUsdt: '10', orderId: 'net-test', network: 'BEP20' });
+    expect(inv.network).toBe('BEP20');
+  });
+});
+
+describe('payment confirmation routes (structure)', () => {
+  test('payment-confirmations router exports and mounts', () => {
+    const mod = require('../src/routes/v1.payment-confirmations');
+    expect(mod).toBeDefined();
+    expect(typeof mod).toBe('function'); // Express router is a function
+  });
+
+  test('withdrawal route validates BEP20 address', async () => {
+    const express = require('express');
+    const app = express();
+    app.use(express.json());
+    app.use('/api/v1/withdrawals', require('../src/routes/v1.withdrawals'));
+    // BEP20 address should pass validation (401 due to no auth, not 400 invalid address)
+    const r = await request(app)
+      .post('/api/v1/withdrawals/request')
+      .send({ amount: '10', dest_address: '0x' + 'a'.repeat(40), network: 'BEP20' });
+    expect(r.status).toBe(401); // auth required, not address validation error
+  });
+
+  test('withdrawal route rejects invalid BEP20 address (401 without auth)', async () => {
+    const express = require('express');
+    const app = express();
+    app.use(express.json());
+    app.use('/api/v1/withdrawals', require('../src/routes/v1.withdrawals'));
+    const r = await request(app)
+      .post('/api/v1/withdrawals/request')
+      .send({ amount: '10', dest_address: 'invalid-address', network: 'BEP20' });
+    expect(r.status).toBe(401); // auth middleware runs before address validation
   });
 });

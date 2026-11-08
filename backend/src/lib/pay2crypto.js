@@ -54,7 +54,13 @@ const ADAPTER_MAP = {
 };
 
 const DEFAULT_BASE_URL = 'https://api.pay2crypto.com/v1/';
-const SUPPORTED_NETWORKS = ['TRC20']; // USDT TRC20 ONLY — anything else throws unsupported_network
+// USDT TRC20 and BEP20 — anything else throws unsupported_network.
+// ADAPTER MAP [network]: payment_network codes are provider-specific and must
+// be verified with docs before live use. Defaults below are research placeholders:
+//   TRC20/Tron   -> payment_network: 1
+//   BEP20/BSC    -> payment_network: 2  (VERIFY-WITH-DOCS)
+const SUPPORTED_NETWORKS = ['TRC20', 'BEP20'];
+const PAYMENT_NETWORK_CODE = { TRC20: 1, BEP20: 2 };
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
 
 function baseUrl() {
@@ -70,16 +76,17 @@ function webhookSecret() {
   return (process.env.PAY2CRYPTO_WEBHOOK_SECRET || '').trim();
 }
 
-// Throws { code:'unsupported_network' } for anything but TRC20. Case-insensitive.
+// Throws { code:'unsupported_network' } for anything but TRC20/BEP20. Case-insensitive.
+// Returns the normalized network name.
 function assertNetwork(network) {
   const n = String(network || 'TRC20').toUpperCase();
   if (!SUPPORTED_NETWORKS.includes(n)) {
-    const err = new Error(`unsupported_network: ${network} (only TRC20 / USDT-TRON supported)`);
+    const err = new Error(`unsupported_network: ${network} (only TRC20 and BEP20 supported)`);
     err.status = 400;
     err.code = 'unsupported_network';
     throw err;
   }
-  return 'TRC20';
+  return n;
 }
 
 function authHeaders(extra) {
@@ -107,7 +114,7 @@ async function createInvoice({ amountUsdt, orderId, network }) {
     order_id: String(orderId),
     currency: 'USDT',
     payment_type: 1, // USDT (researched 2026-10)
-    payment_network: 1, // Tron / TRC20 (researched 2026-10)
+    payment_network: PAYMENT_NETWORK_CODE[network] ?? 1, // TRC20=1, BEP20=2 (VERIFY-WITH-DOCS)
   };
   const res = await fetch(`${baseUrl()}invoices/create`, {
     method: 'POST',
@@ -126,7 +133,7 @@ async function createInvoice({ amountUsdt, orderId, network }) {
     invoiceId: String(invoice.invoice_id || invoice.id || invoice.invoiceId || ''),
     payAddress: invoice.pay_address || invoice.address || invoice.payAddress || null,
     amount: invoice.amount != null ? String(invoice.amount) : String(amountUsdt),
-    network: 'TRC20',
+    network, // echo the requested network
     raw: data,
   };
 }
@@ -156,6 +163,7 @@ async function getInvoice(invoiceId) {
     status: String(invoice.status || invoice.state || 'unknown'),
     amount: invoice.amount != null ? String(invoice.amount) : null,
     txHash: invoice.tx_hash || invoice.txHash || invoice.hash || null,
+    network: String(invoice.network || '').toUpperCase() || null,
     raw: data,
   };
 }
@@ -213,6 +221,7 @@ function verifyWebhook(rawBody, headers, opts) {
     const txHash = body.tx_hash || body.txHash || body.hash || null;
     const amount = body.amount != null ? String(body.amount) : body.value != null ? String(body.value) : null;
     const status = body.status || body.state || null;
+    const network = body.network ? String(body.network).toUpperCase() : null;
     return {
       ok: true,
       eventId: String(eventId),
@@ -220,6 +229,7 @@ function verifyWebhook(rawBody, headers, opts) {
       txHash: txHash ? String(txHash) : null,
       amount,
       status: status ? String(status) : null,
+      network,
       body,
     };
   } catch (e) {

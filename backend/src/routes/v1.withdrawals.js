@@ -26,8 +26,18 @@ router.use(authRequired);
 
 // TRC20: starts with T, 34 chars, base58 (excludes 0, O, I, l).
 const TRON_RE = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+// BEP20: starts with 0x, 40 hex chars (Ethereum checksummed address).
+const BEP20_RE = /^0x[0-9a-fA-F]{40}$/;
 function isTronAddress(addr) {
   return TRON_RE.test(String(addr || '').trim());
+}
+function isBep20Address(addr) {
+  return BEP20_RE.test(String(addr || '').trim());
+}
+function validateWithdrawalAddress(network, addr) {
+  const a = String(addr || '').trim();
+  if (network === 'BEP20') return isBep20Address(a);
+  return isTronAddress(a); // default to TRC20 validation
 }
 
 function isSandboxMode() {
@@ -156,8 +166,9 @@ router.post('/request', async (req, res, next) => {
       idempotencyKey: z.string().min(8).max(96).optional(),
     }).parse(req.body);
     const dest = String(b.dest_address).trim();
-    if (!isTronAddress(dest)) {
-      return res.status(400).json({ error: 'invalid_trc20_address', message: 'Destination must be a TRC20 address (starts with T, 34 base58 chars).' });
+    if (!validateWithdrawalAddress(b.network, dest)) {
+      const netName = b.network === 'BEP20' ? 'BEP20 (0x...)' : 'TRC20 (T...)';
+      return res.status(400).json({ error: 'invalid_address', message: `Destination must be a valid ${netName} address. Public address only — never private keys.` });
     }
     const amt = new Decimal(b.amount);
     if (amt.lte(0)) return res.status(400).json({ error: 'invalid_amount' });
@@ -291,6 +302,7 @@ router.post('/:id/execute', financeOnly, async (req, res, next) => {
 
 module.exports = router;
 module.exports.isTronAddress = isTronAddress;
+module.exports.isBep20Address = isBep20Address;
 module.exports.availableSimUsdt = availableSimUsdt;
 module.exports.dualThreshold = dualThreshold;
 module.exports.isSandboxMode = isSandboxMode;

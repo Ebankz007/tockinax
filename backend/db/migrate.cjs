@@ -411,6 +411,104 @@ async function main() {
   await pool.query(`do $$ begin
     if not exists (select 1 from pg_roles where rolname='gatedp2p_app') then create role gatedp2p_app with login password 'CHANGE_ME_DEV_ONLY'; end if;
   end $$;`).catch(() => {});
+  // ---- Pay2Crypto integration (2026-11): registration activation, upgrades, member-to-member payments ----
+  // append-only, idempotent. All financial postings go through the existing
+  // double-entry ledger (postBalanced). No reward amount is hardcoded here.
+  const pay2cryptoDdl = `
+  create table if not exists activation_payments (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    provider_invoice_id varchar(128),
+    pay_address varchar(128),
+    amount numeric(19,4) not null check (amount > 0),
+    currency varchar(8) not null default 'USDT',
+    network varchar(16) not null check (network in ('TRC20','BEP20')),
+    provider varchar(32) not null default 'pay2crypto',
+    status varchar(24) not null default 'created'
+      check (status in ('created','pending','confirmed','failed','expired','cancelled')),
+    sandbox boolean not null default true,
+    idempotency_key varchar(96) not null unique,
+    tx_hash varchar(128),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    confirmed_at timestamptz
+  );
+  create index if not exists activation_payments_user_idx on activation_payments (user_id);
+  create index if not exists activation_payments_status_idx on activation_payments (status);
+  create index if not exists activation_payments_invoice_idx on activation_payments (provider_invoice_id);
+
+  create table if not exists upgrade_payments (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    from_stage integer not null,
+    to_stage integer not null,
+    fee_amount numeric(19,4) not null check (fee_amount > 0),
+    currency varchar(8) not null default 'USDT',
+    network varchar(16) not null check (network in ('TRC20','BEP20')),
+    provider_invoice_id varchar(128),
+    pay_address varchar(128),
+    provider varchar(32) not null default 'pay2crypto',
+    status varchar(24) not null default 'created'
+      check (status in ('created','pending','confirmed','failed','expired','cancelled')),
+    sandbox boolean not null default true,
+    idempotency_key varchar(96) not null unique,
+    tx_hash varchar(128),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    confirmed_at timestamptz
+  );
+  create index if not exists upgrade_payments_user_idx on upgrade_payments (user_id);
+  create index if not exists upgrade_payments_status_idx on upgrade_payments (status);
+
+  create table if not exists payment_confirmations (
+    id uuid primary key default gen_random_uuid(),
+    buyer_id uuid not null references users(id) on delete cascade,
+    seller_id uuid not null references users(id) on delete cascade,
+    order_id uuid references orders(id) on delete set null,
+    amount numeric(19,4) not null check (amount > 0),
+    currency varchar(8) not null default 'USDT',
+    network varchar(16) not null check (network in ('TRC20','BEP20')),
+    status varchar(24) not null default 'pending'
+      check (status in ('pending','proof_submitted','approved','rejected','disputed','expired')),
+    proof_tx_hash varchar(128),
+    proof_screenshot_key text,
+    seller_confirmed_by uuid references users(id),
+    seller_confirmed_at timestamptz,
+    dispute_reason text,
+    reviewed_by uuid references users(id),
+    reviewed_at timestamptz,
+    idempotency_key varchar(96) not null unique,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    expires_at timestamptz not null default now() + interval '7 days'
+  );
+  create index if not exists payment_confirmations_buyer_idx on payment_confirmations (buyer_id);
+  create index if not exists payment_confirmations_seller_idx on payment_confirmations (seller_id);
+  create index if not exists payment_confirmations_status_idx on payment_confirmations (status);
+  create unique index if not exists payment_confirmations_order_idx on payment_confirmations (order_id) where order_id is not null;
+
+  create table if not exists wallet_change_requests (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    network varchar(16) not null check (network in ('TRC20','BEP20')),
+    new_address varchar(128) not null,
+    status varchar(24) not null default 'pending'
+      check (status in ('pending','approved','rejected','cancelled')),
+    verified_by uuid references users(id),
+    verified_at timestamptz,
+    reject_reason text,
+    password_confirmed boolean not null default false,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+  create index if not exists wallet_change_requests_user_idx on wallet_change_requests (user_id);
+  create index if not exists wallet_change_requests_status_idx on wallet_change_requests (status);
+
+  // BEP20 address regex: starts with 0x, 42 hex chars.
+  // TRON: starts with T, 34 base58 chars (already validated in v1.withdrawals).
+  `;
+  await pool.query(pay2cryptoDdl);
+
   console.log('[migrate] done.');
   await pool.end();
 }

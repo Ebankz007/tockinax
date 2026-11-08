@@ -5,6 +5,9 @@ const { z } = require('zod');
 const { getPool } = require('../lib/db');
 const { signAccess, signRefresh, authRequired } = require('../middleware/auth');
 const speakeasy = require('speakeasy');
+const { validateIntentInput } = require('./v1.deposits');
+const live = require('../lib/pay2crypto');
+const sandbox = require('../lib/pay2crypto-sandbox');
 
 const router = express.Router();
 const TERMS_VERSION = '2026.10-v1';
@@ -100,6 +103,248 @@ router.post('/verify-email', async (req, res, next) => {
     await pool.query(`update users set status='pending_verification', email_verified_at=now() where id=$1`, [chk.rows[0].id]);
     await pool.query(`update identity_checks set status='passed' where user_id=$1 and kind='email'`, [chk.rows[0].id]);
     res.json({ ok: true, next: 'complete_verification_then_activate' });
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/auth/activate-payment — create Pay2Crypto invoice for registration fee.
+// Requires authenticated user with status pending_verification (email already verified).
+// On confirmed webhook, user status transitions to 'active'.
+router.post('/activate-payment', authRequired, async (req, res, next) => {
+  try {
+    const pool = getPool();
+    const user = await pool.query(`select id, email, status from users where id=$1`, [req.user.id]);
+    if (!user.rowCount) return res.status(404).json({ error: 'not_found' });
+    const u = user.rows[0];
+    if (u.status !== 'pending_verification') {
+      return res.status(409).json({ error: 'bad_state', message: `Account status is ${u.status}; activation payment requires pending_verification.` });
+    }
+
+    // Fetch the registration fee from service_fees (default $20 USDT if not configured).
+    const fee = await pool.query(`select amount, currency from service_fees where key='registration' and active=true limit 1`);
+    const amount = fee.rows.length ? String(fee.rows[0].amount) : '20';
+    const currency = fee.rows.length ? String(fee.rows[0].currency) : 'USDT';
+
+    const b = z.object({
+      network: z.string().default('TRC20'),
+      idempotencyKey: z.string().min(8).max(96).optional(),
+    }).parse(req.body);
+    const network = live.assertNetwork(b.network); // throws 400 unsupported_network
+
+    const sandboxMode = (process.env.PAY2CRYPTO_SANDBOX || 'true').toLowerCase() !== 'false';
+    let liveOn = false;
+    if (!sandboxMode) {
+      try {
+        const r = await pool.query(`select enabled from feature_flags where key = 'live_payments'`);
+        liveOn = r.rowCount ? !!r.rows[0].enabled : false;
+      } catch { liveOn = false; }
+      const token = (process.env.PAY2CRYPTO_API_TOKEN || '').trim();
+      if (!liveOn || !token) {
+        return res.status(409).json({
+          error: 'live_disabled',
+          message: 'Live Pay2Crypto invoicing is disabled (needs live_payments flag + PAY2CRYPTO_API_TOKEN).',
+        });
+      }
+    }
+
+    const idem = b.idempotencyKey || `act:${req.user.id}:${amount}:${crypto.randomBytes(8).toString('hex')}`;
+    const dupe = await pool.query(`select * from activation_payments where idempotency_key=$1`, [idem]);
+    if (dupe.rowCount) return res.status(200).json({ replayed: true, payment: dupe.rows[0] });
+
+    const ins = await pool.query(
+      `insert into activation_payments
+        (user_id, amount, currency, network, provider, status, sandbox, idempotency_key)
+       values ($1,$2,$3,$4,'pay2crypto','created',$5,$6) returning *`,
+      [req.user.id, amount, currency, network, sandboxMode, idem]
+    );
+    const payment = ins.rows[0];
+
+    let invoice;
+    try {
+      if (sandboxMode) {
+        const s = sandbox.createInvoice({ amountUsdt: amount, orderId: payment.id, network });
+        invoice = { invoiceId: s.invoiceId, payAddress: s.payAddress };
+      } else {
+        const inv = await live.createInvoice({ amountUsdt: amount, orderId: payment.id, network });
+        invoice = { invoiceId: inv.invoiceId, payAddress: inv.payAddress };
+      }
+    } catch (e) {
+      await pool.query(`update activation_payments set status='failed', updated_at=now() where id=$1`, [payment.id]);
+      throw e;
+    }
+
+    await pool.query(
+      `update activation_payments
+        set provider_invoice_id=$1, pay_address=$2, status='pending', updated_at=now()
+       where id=$3`,
+      [invoice.invoiceId, invoice.payAddress, payment.id]
+    );
+    const updated = await pool.query(`select * from activation_payments where id=$1`, [payment.id]);
+    res.status(201).json({
+      payment: updated.rows[0],
+      pay: {
+        address: invoice.payAddress,
+        qrPayload: invoice.payAddress ? `${invoice.network === 'BEP20' ? 'ethereum' : 'tron'}:${invoice.payAddress}?amount=${amount}&asset=USDT` : null,
+        amount,
+        currency,
+        network: invoice.network,
+        networkDisplay: 'USDT (TRC20 or BEP20)',
+      },
+      sandbox: sandboxMode,
+    });
+  } catch (e) {
+    if (e.code === 'unsupported_network') return res.status(400).json({ error: 'unsupported_network', message: e.message });
+    next(e);
+  }
+});
+
+// POST /api/v1/auth/upgrade-payment — create Pay2Crypto invoice for a stage upgrade fee.
+// Requires authenticated user. Looks up the upgrade fee from stage_definitions.
+// On confirmed webhook, user stage is applied and stage_history recorded.
+router.post('/upgrade-payment', authRequired, async (req, res, next) => {
+  try {
+    const pool = getPool();
+    const user = await pool.query(`select id, stage from users where id=$1`, [req.user.id]);
+    if (!user.rowCount) return res.status(404).json({ error: 'not_found' });
+    const u = user.rows[0];
+    const fromStage = u.stage;
+    const toStage = fromStage + 1;
+    if (toStage > 5) return res.status(409).json({ error: 'max_stage', message: 'Already at the top stage.' });
+
+    const nd = await pool.query(`select upgrade_fee from stage_definitions where stage=$1`, [toStage]);
+    if (!nd.rowCount) return res.status(404).json({ error: 'stage_not_found' });
+    const fee = nd.rows[0]?.upgrade_fee ?? null;
+    if (fee == null) return res.status(409).json({ error: 'fee_unset', message: 'Upgrade fee not published — request blocked until admin discloses a fee.' });
+
+    const b = z.object({
+      network: z.string().default('TRC20'),
+      idempotencyKey: z.string().min(8).max(96).optional(),
+    }).parse(req.body);
+    const network = live.assertNetwork(b.network);
+
+    const sandboxMode = (process.env.PAY2CRYPTO_SANDBOX || 'true').toLowerCase() !== 'false';
+    let liveOn = false;
+    if (!sandboxMode) {
+      try {
+        const r = await pool.query(`select enabled from feature_flags where key = 'live_payments'`);
+        liveOn = r.rowCount ? !!r.rows[0].enabled : false;
+      } catch { liveOn = false; }
+      const token = (process.env.PAY2CRYPTO_API_TOKEN || '').trim();
+      if (!liveOn || !token) {
+        return res.status(409).json({
+          error: 'live_disabled',
+          message: 'Live Pay2Crypto invoicing is disabled (needs live_payments flag + PAY2CRYPTO_API_TOKEN).',
+        });
+      }
+    }
+
+    const amount = String(fee);
+    const currency = 'USDT';
+    const idem = b.idempotencyKey || `upg:${req.user.id}:${fromStage}->${toStage}:${amount}:${crypto.randomBytes(8).toString('hex')}`;
+    const dupe = await pool.query(`select * from upgrade_payments where idempotency_key=$1`, [idem]);
+    if (dupe.rowCount) return res.status(200).json({ replayed: true, payment: dupe.rows[0] });
+
+    const ins = await pool.query(
+      `insert into upgrade_payments
+        (user_id, from_stage, to_stage, fee_amount, currency, network, provider, status, sandbox, idempotency_key)
+       values ($1,$2,$3,$4,$5,$6,'pay2crypto','created',$7,$8) returning *`,
+      [req.user.id, fromStage, toStage, amount, currency, network, sandboxMode, idem]
+    );
+    const payment = ins.rows[0];
+
+    let invoice;
+    try {
+      if (sandboxMode) {
+        const s = sandbox.createInvoice({ amountUsdt: amount, orderId: payment.id, network });
+        invoice = { invoiceId: s.invoiceId, payAddress: s.payAddress };
+      } else {
+        const inv = await live.createInvoice({ amountUsdt: amount, orderId: payment.id, network });
+        invoice = { invoiceId: inv.invoiceId, payAddress: inv.payAddress };
+      }
+    } catch (e) {
+      await pool.query(`update upgrade_payments set status='failed', updated_at=now() where id=$1`, [payment.id]);
+      throw e;
+    }
+
+    await pool.query(
+      `update upgrade_payments
+        set provider_invoice_id=$1, pay_address=$2, status='pending', updated_at=now()
+       where id=$3`,
+      [invoice.invoiceId, invoice.payAddress, payment.id]
+    );
+    const updated = await pool.query(`select * from upgrade_payments where id=$1`, [payment.id]);
+    res.status(201).json({
+      payment: updated.rows[0],
+      pay: {
+        address: invoice.payAddress,
+        qrPayload: invoice.payAddress ? `${invoice.network === 'BEP20' ? 'ethereum' : 'tron'}:${invoice.payAddress}?amount=${amount}&asset=USDT` : null,
+        amount,
+        currency,
+        network: invoice.network,
+        networkDisplay: 'USDT (TRC20 or BEP20)',
+      },
+      sandbox: sandboxMode,
+    });
+  } catch (e) {
+    if (e.code === 'unsupported_network') return res.status(400).json({ error: 'unsupported_network', message: e.message });
+    next(e);
+  }
+});
+
+// GET /api/v1/auth/wallet — member's saved USDT wallet addresses.
+router.get('/wallet', authRequired, async (req, res, next) => {
+  try {
+    const pool = getPool();
+    const r = await pool.query(
+      `select usdt_address_trc20 as trc20, usdt_address_bep20 as bep20 from user_profiles where user_id=$1`,
+      [req.user.id]
+    );
+    if (!r.rowCount) return res.json({ trc20: null, bep20: null });
+    res.json(r.rows[0]);
+  } catch (e) { next(e); }
+});
+
+// POST /api/v1/auth/wallet — set or update a wallet address.
+// Requires current password confirmation. One row per network.
+router.post('/wallet', authRequired, async (req, res, next) => {
+  try {
+    const pool = getPool();
+    const b = z.object({
+      network: z.enum(['TRC20', 'BEP20']),
+      address: z.string().min(1).max(128),
+      password: z.string().min(1),
+    }).parse(req.body);
+
+    // Verify current password.
+    const u = await pool.query(`select password_hash from users where id=$1`, [req.user.id]);
+    if (!u.rowCount) return res.status(404).json({ error: 'not_found' });
+    const ok = await bcrypt.compare(b.password, u.rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'invalid_password' });
+
+    // Validate address format for the network.
+    const a = String(b.address).trim();
+    if (b.network === 'BEP20') {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a)) {
+        return res.status(400).json({ error: 'invalid_address', message: 'Invalid BEP20 address (must start with 0x, 40 hex chars).' });
+      }
+    } else {
+      if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(a)) {
+        return res.status(400).json({ error: 'invalid_address', message: 'Invalid TRC20 address (must start with T, 34 base58 chars).' });
+      }
+    }
+
+    const col = b.network === 'BEP20' ? 'usdt_address_bep20' : 'usdt_address_trc20';
+    await pool.query(
+      `insert into user_profiles (user_id, ${col})
+       values ($1,$2)
+       on conflict (user_id) do update set ${col}=excluded.${col}, updated_at=now()`,
+      [req.user.id, String(b.address).trim()]
+    );
+    await pool.query(
+      `insert into audit_logs (actor_id, action, target_type, target_id, diff, ip)
+       values ($1,'wallet.update','user',$2,$3,$4)`,
+      [req.user.id, req.user.id, { network: b.network }, req.ip]
+    );
+    res.json({ ok: true, network: b.network });
   } catch (e) { next(e); }
 });
 

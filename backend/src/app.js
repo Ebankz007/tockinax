@@ -77,6 +77,7 @@ function buildApp() {
   app.use('/api/v1/withdrawals', require('./routes/v1.withdrawals'));
   app.use('/api/v1/withdrawals', tokenCompat.withdrawalsCompat);
   app.use('/api/v1/pay2crypto-webhook', rateLimit({ windowMs: 60_000, max: 60 }), require('./routes/v1.pay2crypto-webhook'));
+  app.use('/api/v1/payments', require('./routes/v1.payment-confirmations'));
 
   // Minimal OpenAPI stub listing all versioned paths
   app.get('/api/v1/openapi.json', (_req, res) => res.json({
