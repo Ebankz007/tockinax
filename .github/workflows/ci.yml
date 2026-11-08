@@ -163,7 +163,9 @@ jobs:
         run: node cover-check.cjs
 
   # ---------------------------------------------------------------------------
-  # 4. Container images build (correct root context).
+  # 4. Container images build AND start (correct root context).
+  #    `load: true` puts the built image into the runner daemon so the runtime
+  #    stage is actually exercised, not just compiled.
   # ---------------------------------------------------------------------------
   docker:
     name: docker images
@@ -180,6 +182,7 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: false
+          load: true
           tags: tockinax-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -190,6 +193,52 @@ jobs:
           context: .
           file: frontend/Dockerfile
           push: false
+          load: true
           tags: tockinax-frontend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The API has no boot-time DB requirement: /healthz is a liveness probe.
+      # A dummy DATABASE_URL keeps config valid while proving the image starts.
+      - name: Start backend image and check /healthz
+        run: |
+          docker run -d --name tockinax-api-smoke -p 5070:5070 \
+            -e NODE_ENV=production \
+            -e PORT=5070 \
+            -e DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci \
+            -e JWT_SECRET=ci-only-jwt-secret-0000000000000000000000000000 \
+            -e JWT_REFRESH_SECRET=ci-only-refresh-secret-00000000000000000000000 \
+            -e ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            -e APP_URL=http://localhost:3001 \
+            tockinax-backend:ci
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5070/healthz | grep -q '"ok":true'; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs tockinax-api-smoke
+          if [ "$ok" != "1" ]; then echo "backend container failed to become healthy"; exit 1; fi
+          curl -fsS http://127.0.0.1:5070/healthz
+
+      - name: Start frontend image and check /
+        run: |
+          docker run -d --name tockinax-web-smoke -p 3001:3001 tockinax-frontend:ci
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:3001/; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs tockinax-web-smoke
+          if [ "$ok" != "1" ]; then echo "frontend container failed to serve /"; exit 1; fi
+          curl -fsS -o /dev/null -w "frontend_http=%{http_code}\n" http://127.0.0.1:3001/
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          docker logs tockinax-api-smoke || true
+          docker logs tockinax-web-smoke || true
+
+      - name: Stop smoke containers
+        if: always()
+        run: |
+          docker rm -f tockinax-api-smoke tockinax-web-smoke || true
