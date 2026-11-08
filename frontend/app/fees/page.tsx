@@ -8,7 +8,7 @@ import { api, errMsg } from '@/lib/api';
 type Fee = { key: string; amount: string; currency: string; description?: string; refund_policy?: string };
 
 const PLACEHOLDERS: [string, string, string][] = [
-  ['Registration', '20 USDT', 'Split $5 direct referral, $2 second generation, $1 third generation, $2 leadership pool, $2 transaction charges, $8 administration.'],
+  ['Registration', '20 USDT', 'One-time membership registration fee.'],
   ['Token purchase', 'Per active pricing version', 'Approved target rates, simple and non-compounded: 7 days 0.60%/day (4.20%), 14 days 0.75%/day (10.50%), 30 days 1.00%/day (30.00%).'],
   ['Stage entry fee', 'Per stage (approved)', 'Paid once when entering: Stage 1 $20 registration, Stage 2 $25, Stage 3 $50, Stage 4 $100, Stage 5 $250.'],
   ['Company-funded settlement', '10% of projected profit', 'Optional maturity settlement from the company reserve; deducted from the projected profit only.'],

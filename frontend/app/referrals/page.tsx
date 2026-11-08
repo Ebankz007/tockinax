@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import RiskStrip from '@/components/RiskStrip';
-import { REFERRAL_REWARDS, REGISTRATION_SPLIT } from '@/lib/plan';
 
-// Approved plan: three referral generations, paid per eligible $20 registration.
-const GENERATIONS: [string, string, string][] = REFERRAL_REWARDS.map((r) => [
-  `Generation ${r.generation}`,
-  r.name,
-  `$${r.amountUsdt}`,
-]);
+// Approved plan: three referral generations, paid per eligible registration.
+const GENERATIONS: [string, string, string][] = [
+  ['Generation 1', 'Direct referrer', 'Paid when approved and funded'],
+  ['Generation 2', 'Second generation', 'Paid when approved and funded'],
+  ['Generation 3', 'Third generation', 'Paid when approved and funded'],
+];
 
 export default function ReferralsPage() {
   return (
@@ -19,12 +18,12 @@ export default function ReferralsPage() {
         <p className="alert-info" role="note">
           The approved plan has three referral generations. Rewards are recorded but not active
           until separately approved and funded. Registration fees, deposits and member transfers
-          never qualify beyond the published registration split.
+          never qualify.
         </p>
         <h2 className="font-display font-semibold text-white">Three referral generations</h2>
         <p className="text-sm text-mist">
-          Each eligible $20 registration allocates $5 to the direct referrer, $2 to the second
-          generation and $1 to the third generation. Deeper levels do not qualify.
+          Each eligible registration allocates referral rewards across three generations. Deeper
+          levels do not qualify.
         </p>
         <table className="table">
           <thead>
@@ -46,34 +45,11 @@ export default function ReferralsPage() {
         </table>
 
         <h2 className="font-display font-semibold text-white">
-          $20 registration allocation
+          Registration fee
         </h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th scope="col">Allocation</th>
-              <th scope="col">Purpose</th>
-              <th scope="col">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {REGISTRATION_SPLIT.map((r) => (
-              <tr key={r.key}>
-                <td className="text-white">{r.label}</td>
-                <td>{r.purpose}</td>
-                <td className="text-gold">${r.amountUsdt}</td>
-              </tr>
-            ))}
-            <tr>
-              <td className="font-bold text-white">Total</td>
-              <td>Registration fee</td>
-              <td className="font-bold text-gold">$20</td>
-            </tr>
-          </tbody>
-        </table>
         <p className="text-sm text-mist">
-          The $2 leadership allocation is distributed under the published leadership rules. All
-          referral rewards ship disabled; they enable only after approval and funding.
+          The registration fee is $20 USDT. Its internal allocation is configured by
+          administrators and is not published to members.
         </p>
 
         <h2 className="font-display font-semibold text-white">Anti-fraud rules</h2>

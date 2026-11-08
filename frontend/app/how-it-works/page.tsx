@@ -3,7 +3,7 @@ import RiskStrip from '@/components/RiskStrip';
 
 export default function HowItWorksPage() {
   const steps: [string, string][] = [
-    ['Register & Activate', 'Create your account and activate membership. Registration is a recorded $20 USDT fee, split $5 / $2 / $1 / $2 / $2 / $8 across referrals, the leadership pool, processing and administration.'],
+    ['Register & Activate', 'Create your account and activate membership. Registration is a recorded $20 USDT fee.'],
     ['Select Token Lock', 'Lock for 7 days (0.60%/day, 4.20% target), 14 days (0.75%/day, 10.50% target) or 30 days (1.00%/day, 30.00% target) — simple and non-compounded. Locked positions cannot be sold or transferred until maturity. Example: 100 → TARGET 104.20 / 110.50 / 130.00. Targets, not guarantees.'],
     ['Choose Settlement', 'Before locking, pick marketplace settlement or the company-funded option. Marketplace settlement lists the position at its target price at maturity; company-funded settlement pays from the company reserve and charges 10% of the projected profit, approved manually by an admin.'],
     ['Track Maturity & Advance', 'Follow the maturity date and settlement status. Stage advancement depends on the eligible locking range and the stage entry fee, not on counting cycles. Referral depth is capped at three generations.'],

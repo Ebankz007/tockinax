@@ -5,7 +5,6 @@ import {
   STAGES,
   LOCK_TERMS,
   REFERRAL_REWARDS,
-  REGISTRATION_SPLIT,
   usdt,
 } from '@/lib/plan';
 
@@ -20,7 +19,7 @@ const STEPS = [
   {
     n: '01',
     title: 'Register & activate',
-    body: 'Create an account and activate membership. Registration is a recorded $20 USDT fee, split across referrals, the leadership pool, processing and administration.',
+    body: 'Create an account and activate membership. Registration is a recorded $20 USDT fee.',
   },
   {
     n: '02',
@@ -213,10 +212,8 @@ export default function Home() {
             Three referral generations
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-mist">
-            Each eligible $20 registration allocates <strong className="text-bright">$5</strong> to
-            the direct referrer, <strong className="text-bright">$2</strong> to the second
-            generation and <strong className="text-bright">$1</strong> to the third. Rewards are
-            recorded but <strong className="text-bright">not active</strong> until approved and funded.
+            Each eligible registration allocates referral rewards across three generations.
+            Rewards are recorded but <strong className="text-bright">not active</strong> until approved and funded.
           </p>
         </div>
 
@@ -240,34 +237,6 @@ export default function Home() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-edge/70 bg-surface">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-edge/70 text-left text-[11px] uppercase tracking-wider text-mist">
-                  <th className="px-4 py-3 font-semibold">$20 registration split</th>
-                  <th className="px-4 py-3 font-semibold">Purpose</th>
-                  <th className="px-4 py-3 text-right font-semibold">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {REGISTRATION_SPLIT.map((r) => (
-                  <tr key={r.key} className="border-b border-edge/40 last:border-0">
-                    <td className="px-4 py-3 font-medium text-bright">{r.label}</td>
-                    <td className="px-4 py-3 text-xs text-mist">{r.purpose}</td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-bright tnum">
-                      ${r.amountUsdt}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-ink/60">
-                  <td className="px-4 py-3 font-bold text-bright">Total</td>
-                  <td className="px-4 py-3 text-xs text-mist">Registration fee</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-gold tnum">$20</td>
-                </tr>
               </tbody>
             </table>
           </div>

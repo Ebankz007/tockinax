@@ -20,8 +20,8 @@ const SECTIONS: [string, string[]][] = [
     '3. Commissions and categories',
     [
       'Referral rewards cover three generations only and pay only on eligible registrations after approval and funding; payouts stay disabled until then.',
-      'Each eligible $20 registration allocates $5 to the direct referrer, $2 to the second generation and $1 to the third. Deeper levels never qualify.',
-      'No reward pays for recruitment beyond the published registration split. Abuse leads to suspension and forfeiture of pending rewards.',
+      'Referral rewards are allocated across three generations. Internal allocation amounts are configured by administrators and are not published to members.',
+      'No reward pays for recruitment beyond the published registration fee. Abuse leads to suspension and forfeiture of pending rewards.',
     ],
   ],
   [
