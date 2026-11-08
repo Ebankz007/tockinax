@@ -18,6 +18,10 @@
 
 Off-platform transfers are disabled by policy (no transfer endpoint ships).
 
+The legacy `TKX-SIM` pilot definition is retired. `seed.cjs` deletes it when no
+holding references it; if historical holdings exist it is kept only as an
+inactive FK target. `TKX` is the only active token code.
+
 ## 2. Contract codes (exact, read by payments module)
 
 | account | type | ccy | purpose |

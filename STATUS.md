@@ -22,13 +22,63 @@
   insurance members) and `/admin/insurance` (members + claims).
 - UI/BACKEND COPY: all SIM/"SIMULATED pilot"/simulator naming and MMITPS INC removed.
   Logout beside Change password on dashboard/admin; Forgot password only on login.
-- VERIFIED: jest **9 suites, 64 passed, 7 skipped**; token-smoke **32/32**;
-  company-settlement check balanced (profit 4.20, fee 0.42, net 103.78, balance
-  900 → 1003.78); frontend build PASS. Local migrate + seed applied.
-- NOTE: CI `docker images` job still fails on "Build frontend image"; the pm2 cron deploy
-  gate only requires `unit`, `integration` and `frontend build`, so deploys proceed.
-  Deploy runs migrations only — run `npm run db:seed --workspace=backend` on the server
-  after deploy so the new pricing/stage/referral rows apply live.
+- VERIFIED (2026-11-08): jest **10 suites, 77 passed, 0 skipped** with a live
+  Postgres (`payout-eligibility` suite added); token-smoke **32/32**; live-smoke
+  **35/35**; cover-check **43/43**; frontend production build PASS; migrate +
+  `seed` run twice (idempotent). Company-settlement check balanced (profit 4.20,
+  fee 0.42, net 103.78, balance 900 → 1003.78).
+- DOCKER FIX: `docker images` failed on "Build frontend image" because a
+  frontend-only `npm ci` omitted `@types/node`; Next 15 then auto-installed deps
+  and upgraded itself mid-build. `frontend/package.json` now declares
+  `@types/node ^26.6.6`, which hoists to the ROOT `node_modules` — the only tree
+  the builder stage copies. Clean-install builder simulation reproduces the exact
+  Docker stage and passes. `.dockerignore` also excludes `ooo/`,
+  `tockinax 1st build/` and `*.zip` so untracked local material can never enter
+  the build context.
+- DEPLOY NOTE: the pm2 cron deploy runs migrations only. Run
+  `npm run db:seed --workspace=backend` on the server after deploy so the
+  pricing/stage/referral rows and the legacy `TKX-SIM` / branding cleanup apply.
+
+## Production audit (2026-11-08)
+
+- PRODUCTION DB (read-only): `pricing_rules` v1 = 60/75/100 bps/day simple;
+  `stage_definitions` 1–5 ranges and entry fees 20/25/50/100/250 with
+  `renewal_fee NULL`; `registration_fee_split` = $5/$2/$1/$2/$2/$8;
+  `commission_categories`/`rules` recorded but inactive; ledger 0 transactions,
+  0 entries, balanced, no duplicate idempotency keys; 3 users (2 `pending_email`,
+  1 active `super_admin`); 1 audit log.
+- STALE DATA FIXED IN SEED: production had an unreferenced `TKX-SIM` token
+  definition (0 holdings, 0 policies) and `system_settings.platform.company =
+  "MMITPS INC"`. `seed.cjs` now deletes `TKX-SIM` only when unreferenced
+  (otherwise deactivates it to preserve historical FKs) and updates `company`
+  only when it is exactly `MMITPS INC`, leaving admin-edited name/domain alone.
+  Seed is safe to re-run; no balances, ledger rows, holdings or history are
+  overwritten.
+- DUPLICATE PAYOUT FIX: commission/reward calculation rows stay `payable` after a
+  payout is requested or paid, so the old eligibility query could fund the same
+  balance twice. `src/lib/payoutEligibility.js` now subtracts every
+  `payout_requests` row in `requested/under_review/approved/processing/paid`
+  (commission/reward kinds only; insurance claims excluded). The request path
+  runs inside a transaction with a per-user+currency advisory lock, and the
+  finance review path excludes the request being reviewed. New
+  `tests/payout-eligibility.test.js` proves subtraction, review exclusion and
+  release on rejection.
+- UI/API: removed the leftover `simulated: true` field from the staff token KPI
+  response. No SIM/simulator naming, no MMITPS INC branding.
+- SECURITY FINDINGS STILL OPEN (reported, not silently changed):
+  1. Production sandbox lets any authenticated member self-credit USDT through
+     `POST /deposits/:id/simulate-pay` while `PAY2CRYPTO_SANDBOX=true`.
+  2. Global and auth rate limits are commented out (debug commit `8b16616`).
+  3. Forgot-password stores a token and only console-logs it; no reset endpoint.
+  4. Account insurance self-activates without payment or admin approval.
+  5. Sandbox withdrawal execution marks `paid` without a balanced ledger posting.
+  6. `express.json({limit:'256kb'})` is intentional; internal ledger identifiers
+     (`LIAB:sim_usdt`, `SIM:usdt_clearing`) are not user-facing.
+- DOCKER: local Docker Desktop/WSL2 is unavailable on this host, so image
+  build/run is verified by the CI `docker images` job (buildx, root context) and
+  by the clean-install builder-stage simulation. The pm2 deploy gate remains
+  `unit` + `integration (postgres)` + `frontend build`; container images are
+  publish-only.
 
 ## Completed
 - [x] Phase 1: inspection + ARCHITECTURE.md + IMPLEMENTATION_PLAN.md

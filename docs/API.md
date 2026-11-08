@@ -13,6 +13,7 @@ Health (no auth): `GET /healthz`, `GET /readyz`. Schema stub: `GET /api/v1/opena
 | POST | `/auth/verify-email` | no | `{ email, token }` | `200 { ok:true }` · `400 invalid_token` |
 | POST | `/auth/login` | no | `{ email, password }` | `200 { access, refresh, referralCode, status }` + cookie · `401 invalid_credentials` · `423 locked` (10 fails → 30 min lock + audit) |
 | GET | `/auth/me` | yes | — | `200 { id, email, status, referral_code, display_name }` · `401` |
+| POST | `/auth/forgot-password` | no | `{ email }` | `200 { ok:true }` always (anti-enumeration). Stores a SHA-256 reset token in `password_resets` (1h TTL). **Current limitation:** the token is only console-logged; no `/auth/reset-password` endpoint ships yet. |
 
 ## Marketplace — `/api/v1/marketplace` (auth required)
 
@@ -49,7 +50,14 @@ Seeds ship `status=draft`, `funding_source=NULL`. Rates are NOT returns on depos
 | POST | `/payouts/request` | `{ kind:commission\|reward, amount:"N.NNNN", currency:USD\|NGN, destination:{…}, idempotencyKey? }` — `destination` with `privateKey/seed/mnemonic` rejected | `201 payout_request (requested)` · `200 { replayed:true }` on key replay · `400 never_share_keys` · `422 insufficient_eligible + eligible` · `401` anon |
 | GET | `/payouts/mine` | — | `200 payout_requests[≤50]` · `401` anon |
 
-Eligible balance = confirmed-`payable` commission/reward calcs only. Dual approval over `PAYOUT_DUAL_APPROVAL_THRESHOLD_NGN` is enforced in admin review (Phase 5 UI).
+Eligible balance = confirmed-`payable` commission/reward calcs **minus every
+outstanding or settled payout request** (`requested`, `under_review`, `approved`,
+`processing`, `paid`); rejected/failed/cancelled/reversed requests release their
+amount. Insurance-claim payouts (`kind='insurance_claim'`, USDT) are excluded.
+`POST /payouts/request` runs in a transaction with a per-user+currency advisory
+lock, so two concurrent submissions cannot spend the same balance. The finance
+review path excludes the request under review. Dual approval over
+`PAYOUT_DUAL_APPROVAL_THRESHOLD_NGN` is enforced in admin review (Phase 5 UI).
 
 ## Admin — `/api/v1/admin` (auth + `super_admin` role)
 
@@ -159,10 +167,10 @@ Record-only until `feature_flags.live_payments=true`. With live off, events are 
 | `GET /api/v1/tokens/stage/me` (=`/stages/current`) | member | `{current, limits, requirements, upgrade:{fee\|fee_unset}, renewal}` — `renewal` is 409 `fee_unset` (plan publishes no renewal fee) |
 | `POST /api/v1/tokens/stage/request` · `/stages/upgrade` · `/stages/renew` | member | `{kind}` → 201 pending (entry fee) or 409 `fee_unset` / `max_stage` |
 | `GET /api/v1/tokens/stages` · `/stages/config` | member | definitions (read-only; `PUT` → 409 `configuration_locked`) |
-| `GET /api/v1/tokens/definitions` · `/pricing-versions` · `/categories` | member | TKX spec, versioned simple-pricing rows (7/14/30), 3 DISABLED referral categories |
+| `GET /api/v1/tokens/definitions` · `/pricing-versions` · `/categories` | member | TKX spec (legacy `TKX-SIM` retired/deactivated), versioned simple-pricing rows (7/14/30), 3 DISABLED referral categories |
 | `GET /api/v1/tokens/commissions` | member | by category+generation (empty until rules approved+funded) |
 | `GET /api/v1/tokens/statement` | member | `{lines}` JSON for CSV export |
-| `GET /api/v1/tokens/admin/kpis` | staff | counts; member → 403 |
+| `GET /api/v1/tokens/admin/kpis` | staff | counts (no `simulated` flag); member → 403 |
 | `GET /api/v1/tokenmarket/listings` | member | open/partial, search/sort/page; remaining bars |
 | `POST /api/v1/tokenmarket/listings/:id/buy` | member | `{qty}` (TKX units) → 201 fill + `remaining_qty`; 409 `insufficient_remaining`; oversell-safe (`FOR UPDATE`) |
 | `GET /api/v1/tokenmarket/fills/mine` · `/proceeds` | member | receipts + unsold balances (unsold stays visible) |

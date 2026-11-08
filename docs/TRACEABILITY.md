@@ -37,6 +37,24 @@
 | Per-token purchase retired | `POST /insurance/purchase` → 410 `account_level_insurance_only` | no token/lock attachment |
 | Claims | `insurance_claims` (nullable `policy_id`) reviewed by super_admin | manual approval before payout |
 
+## Release hardening (2026-11-08)
+
+| Item | Module | Proof |
+|---|---|---|
+| Frontend Docker build (`docker images`) | `frontend/package.json` (`@types/node ^26.6.6` hoisted), `.dockerignore` | clean `npm ci --workspace=frontend` + builder-stage simulation; CI buildx job |
+| Duplicate payout prevention | `src/lib/payoutEligibility.js`, `v1.payouts`, `v1.finance` | `tests/payout-eligibility.test.js` (subtract outstanding/paid, exclude request under review, release on rejection); advisory lock |
+| Legacy `TKX-SIM` cleanup | `db/seed.cjs` | delete when unreferenced, deactivate when held; re-run twice |
+| Branding correction | `db/seed.cjs` (`platform.company` guard) | updates only exact `MMITPS INC`, preserves admin name/domain |
+| Insurance claims vs commission eligibility | `payoutEligibility.js` kind filter | insurance `USDT` claims never netted against USD/NGN payouts |
+
+### Open security findings (reported, not silently changed)
+
+1. Sandbox `POST /deposits/:id/simulate-pay` lets any authenticated member self-credit USDT while `PAY2CRYPTO_SANDBOX=true`.
+2. Global/auth rate limits are disabled (debug commit `8b16616`).
+3. Forgot-password has no reset endpoint; token is console-logged only.
+4. Account insurance self-activates without payment or admin approval.
+5. Sandbox withdrawal execution marks `paid` without a balanced ledger posting.
+
 ## Legal gates (must ALL pass before any live enablement)
 
 1. Legal opinion: participation record is not a security / not a deposit product.
