@@ -1,4 +1,34 @@
-# STATUS — TOCKINAX readiness tracker (updated 2026-10-15, integrated verification)
+# STATUS — TOCKINAX readiness tracker (updated 2026-11-08, approved-plan alignment)
+
+## Approved-plan alignment (2026-11-08)
+- LOCK TERMS: 7d 0.60%/day → 4.20% (100 → 104.20), 14d 0.75%/day → 10.50% (100 → 110.50),
+  30d 1.00%/day → 30.00% (100 → 130.00). Simple, non-compounded. `pricing_rules` v1 seeded
+  for all three terms; `tokenPricing.js` validates `[7,14,30]`.
+- STAGES: approved ranges + entry fees — S1 50–500/$20 (registration), S2 500.01–2,000/$25,
+  S3 2,000.01–5,000/$50, S4 5,000.01–50,000/$100, S5 50,000.01–100,000/$250. Progression is
+  by eligible range + entry fee; `req_cycles_7d/14d = 0`. `renewal_fee = NULL` (renewal
+  requests return 409 `fee_unset`).
+- REFERRALS: three generations only (`STAGE_GENS = {1:1,2:2,3:3,4:3,5:3}`), categories
+  reduced to `referral_gen1/2/3`. Registration $20 split $5/$2/$1/$2/$2/$8. All rules
+  inactive / payouts gated (`feesEnforced: false`).
+- INSURANCE: account-level membership only (`POST /auth/insurance/activate`,
+  `GET /auth/insurance/status`). Token purchases require active account insurance and are
+  queued `pending_approval` for manual admin review. Per-token `POST /insurance/purchase`
+  retired (410 `account_level_insurance_only`); `insurance_claims.policy_id` nullable.
+- SETTLEMENT: per-holding `settlement_option` (`marketplace` default | `company_reserve`).
+  Company-funded settlement charges 10% of projected profit, is paid manually from the
+  company reserve after admin approval (`settlement_pending` → `settled`), and posts a
+  balanced ledger transaction. Admin UI: `/admin/approvals` (purchases + settlements +
+  insurance members) and `/admin/insurance` (members + claims).
+- UI/BACKEND COPY: all SIM/"SIMULATED pilot"/simulator naming and MMITPS INC removed.
+  Logout beside Change password on dashboard/admin; Forgot password only on login.
+- VERIFIED: jest **9 suites, 64 passed, 7 skipped**; token-smoke **32/32**;
+  company-settlement check balanced (profit 4.20, fee 0.42, net 103.78, balance
+  900 → 1003.78); frontend build PASS. Local migrate + seed applied.
+- NOTE: CI `docker images` job still fails on "Build frontend image"; the pm2 cron deploy
+  gate only requires `unit`, `integration` and `frontend build`, so deploys proceed.
+  Deploy runs migrations only — run `npm run db:seed --workspace=backend` on the server
+  after deploy so the new pricing/stage/referral rows apply live.
 
 ## Completed
 - [x] Phase 1: inspection + ARCHITECTURE.md + IMPLEMENTATION_PLAN.md
@@ -85,7 +115,7 @@
 - VERIFIED post-rename: jest 7 suites 29 passed / 7 skipped, live-smoke 34/34, frontend
   build compiled, root lock regenerated (`tockinax`, 556 pkgs).
 
-## Token marketplace build (2026-10-16 — Henry decisions: TOCKINAX spelling, sim token, market-clearing pilot, fee placeholders, Pay2Crypto gateway sandbox-first)
+## Token marketplace build (2026-10-16 — Henry decisions: TOCKINAX spelling, sim token, market-clearing pilot, fee placeholders, Pay2Crypto gateway sandbox-first) *(historical — superseded by Approved-plan alignment 2026-11-08)*
 - TOKEN MODULES: `token_definitions` (TKX-SIM: supply 10M, 1 TKX = 1 USDT sim basis, off-platform transfers disabled, rights none), versioned simple pricing (7d→107%, 14d→114%, never compounded), holdings + locks, maturity job (auto-list at target, idempotent), partial-fill marketplace (`FOR UPDATE`, oversell-proof), participation cycles (success = lock + FULLY SETTLED resale), 5 stage definitions (limits/fees NULL placeholders; upgrades/renewals 409 `fee_unset`), 8 commission categories (all DISABLED, rates NULL), stage→generation gates (1→1 … 5→5), member_no `TKX-*`.
 - PAYMENTS: Pay2Crypto adapter (researched: non-custodial, USDT TRC20-only, scoped tokens, sandbox env, https://api.pay2crypto.com/v1/; docs site unfetchable — unknowns isolated in adapter MAP + docs/PAYMENTS_PAY2CRYPTO.md). Deposit intents → sandbox invoice → simulate-pay/webhook → SIM-USDT credited (balanced, idempotent). TRC20-only enforced (BEP20/ERC20 → 400). Withdrawals: TRC20 validation, dual approval, sandbox execution; live → 409/403 everywhere without keys. No key storage anywhere.
 - INTEGRATION FIXES by owner: `currency/base/quote` widened varchar(3)→(8) (USDT needs 4 chars); deposit insert missing idempotency value; fill idempotency hashed to fit varchar(96); Zod errors now 400 `invalid_input` (was 500); purchase accepts frontend field aliases; compat layer (`v1.tokencompat.js`) aligns all frontend-assumed paths + adds read-only stage config, categories, KPIs, admin oversight for token listings/deposits/withdrawals. Frontend untouched — its tolerant client + new aliases cover every assumed URL.

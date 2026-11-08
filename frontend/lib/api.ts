@@ -175,7 +175,7 @@ export type TokenDef = {
   id: string;
   code: string;
   name?: string;
-  cycle_days: 7 | 14;
+  cycle_days: 7 | 14 | 30;
   purchase_price: string;
   target_price: string;
   status?: string;
@@ -188,9 +188,12 @@ export type Holding = {
   quantity?: string | number;
   cost?: string | number;
   cost_basis?: string | number;
+  cost_usdt?: string | number;
   lock?: string;
   lock_status?: string;
   status?: string;
+  lock_days?: number;
+  settlement_option?: 'marketplace' | 'company_reserve';
   matures_at?: string | null;
   created_at?: string;
   cycle_days?: number;
@@ -358,7 +361,7 @@ export type InsurancePolicy = {
 
 export type InsuranceClaim = {
   id: string;
-  policy_id: string;
+  policy_id: string | null;
   user_id: string;
   amount: string | number;
   reason: string;

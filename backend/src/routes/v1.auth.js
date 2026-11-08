@@ -69,10 +69,10 @@ router.post('/register', async (req, res, next) => {
     if (referrer) {
       await pool.query(`insert into referrals (ancestor_id, descendant_id, depth) values ($1,$2,1) on conflict do nothing`, [referrer.id, userId]);
       await pool.query(`insert into referral_closure (ancestor_id, descendant_id, depth) values ($1,$2,1) on conflict do nothing`, [referrer.id, userId]);
-      // depth 2..5 roll-up from referrer's ancestors
+      // Approved plan: three referral generations only (depth 2..3 roll-up).
       await pool.query(
         `insert into referral_closure (ancestor_id, descendant_id, depth)
-         select ancestor_id, $2, depth+1 from referral_closure where descendant_id=$1 and depth < 5
+         select ancestor_id, $2, depth+1 from referral_closure where descendant_id=$1 and depth < 3
          on conflict do nothing`, [referrer.id, userId]);
     }
     // Transparent fee disclosure (default 0 until admin configures)

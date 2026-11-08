@@ -18,13 +18,13 @@ type StageDef = {
   fee?: string | number | null;
 };
 
-// Approved compensation plan — fallback only, while the stages API is unavailable.
+// Approved plan — fallback only, while the stages API is unavailable.
 const APPROVED: StageDef[] = [
-  { n: 1, name: 'Entry', min: 50, max: 500, upgrade_fee: 100, renewal_fee: 25 },
-  { n: 2, name: 'Growth', min: 500, max: 2500, upgrade_fee: 250, renewal_fee: 50 },
-  { n: 3, name: 'Advancement', min: 2500, max: 10000, upgrade_fee: 600, renewal_fee: 120 },
-  { n: 4, name: 'Premium', min: 10000, max: 25000, upgrade_fee: 1500, renewal_fee: 300 },
-  { n: 5, name: 'Elite', min: 25000, max: 100000, upgrade_fee: 0, renewal_fee: 600 },
+  { n: 1, name: 'Entry', min: 50, max: 500, upgrade_fee: 20 },
+  { n: 2, name: 'Growth', min: 500.01, max: 2000, upgrade_fee: 25 },
+  { n: 3, name: 'Advanced', min: 2000.01, max: 5000, upgrade_fee: 50 },
+  { n: 4, name: 'Premium', min: 5000.01, max: 50000, upgrade_fee: 100 },
+  { n: 5, name: 'Elite', min: 50000.01, max: 100000, upgrade_fee: 250 },
 ];
 
 const limit = (s: StageDef) => {
@@ -51,12 +51,10 @@ export default function StagesPage() {
           Membership stages
         </h1>
         <p className="text-sm text-mist">
-          Five stages gate lock limits, generation depth and marketplace access. Values below are the
-          approved compensation plan (USDT). An <strong className="text-white">upgrade fee</strong> is the
-          fee to leave your current stage; a <strong className="text-white">renewal fee</strong> is charged
-          at your current stage.
+          Five stages gate the eligible locking range. Each stage fee is paid once when entering
+          that stage: Stage 1 is the $20 registration, then $25, $50, $100 and $250. Upgrade fees
+          are separate from the amount locked.
         </p>
-        Stages API is not available yet.
         {mod.state === 'loading' && <p role="status">Loading stages…</p>}
         {mod.state === 'deploying' && <ModuleEmpty title="Stages module deploying." />}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}
@@ -65,9 +63,8 @@ export default function StagesPage() {
             <thead>
               <tr>
                 <th scope="col">Stage</th>
-                <th scope="col">Buy limits</th>
-                <th scope="col">Upgrade fee</th>
-                <th scope="col">Renewal fee</th>
+                <th scope="col">Eligible locking range</th>
+                <th scope="col">Fee</th>
                 <th scope="col">Note</th>
               </tr>
             </thead>
@@ -78,9 +75,16 @@ export default function StagesPage() {
                   <tr key={n}>
                     <td className="text-white font-semibold">{s.name || `Stage ${n}`}</td>
                     <td>{limit(s)}</td>
-                    <td className="text-gold">{fee(s.upgrade_fee ?? s.fee)}</td>
-                    <td className="text-gold">{fee(s.renewal_fee)}</td>
-                    <td className="text-mist">{n >= 5 ? 'Top stage — cannot upgrade further.' : `Fee to leave stage ${n}.`}</td>
+                    <td className="text-gold">
+                      {n === 1 ? `$${fee(s.upgrade_fee ?? s.fee)} registration` : `$${fee(s.upgrade_fee ?? s.fee)} upgrade`}
+                    </td>
+                    <td className="text-mist">
+                      {n === 1
+                        ? 'Initial registration fee.'
+                        : n >= 5
+                          ? 'Top stage — cannot upgrade further.'
+                          : `Paid once when entering stage ${n}.`}
+                    </td>
                   </tr>
                 );
               })}
@@ -88,7 +92,7 @@ export default function StagesPage() {
           </table>
         )}
         <p className="text-sm text-mist">
-          Nothing charges until a fee is disclosed and you confirm. Upgrades and renewals create a pending
+          Nothing charges until a fee is disclosed and you confirm. Upgrades create a pending
           request reviewed before any fee applies.
         </p>
         <div className="flex flex-wrap gap-2 text-sm">

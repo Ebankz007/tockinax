@@ -8,9 +8,10 @@ import { api, errMsg } from '@/lib/api';
 type Fee = { key: string; amount: string; currency: string; description?: string; refund_policy?: string };
 
 const PLACEHOLDERS: [string, string, string][] = [
-  ['Token purchase', 'Per pricing version (1%/day simple)', 'Sticker price per cycle; set by the active pricing version (7d → +7%, 14d → +14%).'],
-  ['Stage upgrade', 'Per stage (approved)', 'Fee to leave your current stage: 1→2 100, 2→3 250, 3→4 600, 4→5 1500 USDT.'],
-  ['Stage renewal', 'Per stage (approved)', 'Renewal at your current stage: S1 25, S2 50, S3 120, S4 300, S5 600 USDT.'],
+  ['Registration', '20 USDT', 'Split $5 direct referral, $2 second generation, $1 third generation, $2 leadership pool, $2 transaction charges, $8 administration.'],
+  ['Token purchase', 'Per active pricing version', 'Approved target rates, simple and non-compounded: 7 days 0.60%/day (4.20%), 14 days 0.75%/day (10.50%), 30 days 1.00%/day (30.00%).'],
+  ['Stage entry fee', 'Per stage (approved)', 'Paid once when entering: Stage 1 $20 registration, Stage 2 $25, Stage 3 $50, Stage 4 $100, Stage 5 $250.'],
+  ['Company-funded settlement', '10% of projected profit', 'Optional maturity settlement from the company reserve; deducted from the projected profit only.'],
   ['Marketplace order', '~1% platform accounting (configurable)', 'Recorded on completed orders; configurable by admin.'],
   ['Token market fill fee', 'None', 'Fills settle at the listing target price; no separate fill fee.'],
   ['Payout / withdrawal', 'Method-dependent', 'Only from eligible, confirmed balances.'],
@@ -37,7 +38,7 @@ export default function FeesPage() {
         </h1>
         <p className="text-sm text-mist">
           Transparent pricing: registration, token and marketplace fees are disclosed before you
-          pay. Stage upgrade and renewal fees follow the approved compensation plan.
+          pay. Registration is 20 USDT and stage entry fees follow the approved compensation plan.
           There are no hidden investment-style charges and no guaranteed returns of any kind.
         </p>
         {loading && <p role="status">Loading fee schedule…</p>}

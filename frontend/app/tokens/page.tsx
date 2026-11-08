@@ -3,21 +3,24 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RiskStrip from '@/components/RiskStrip';
 import ModuleEmpty from '@/components/ModuleEmpty';
+import { LOCK_TERMS, targetResale, type LockTermDays } from '@/lib/plan';
 import { fetchModule, listOf, type ModuleState, type TokenDef } from '@/lib/api';
 
-const EXAMPLES = [
-  { days: 7, buy: 100, target: 107, note: '7-day lock: 100 → TARGET 107 (simple math: 100 + 7). 1%/day, non-compounded.' },
-  { days: 14, buy: 100, target: 114, note: '14-day lock: 100 → TARGET 114 (simple math: 100 + 14). 1%/day, non-compounded.' },
-];
+const EXAMPLES = LOCK_TERMS.map((t) => ({
+  days: t.days,
+  buy: 100,
+  target: targetResale(100, t.days),
+  note: `${t.days}-day lock: 100 → TARGET ${targetResale(100, t.days).toFixed(2)} (simple math: ${(t.ratePerDay * 100).toFixed(2)}%/day × ${t.days} days = ${(t.termRate * 100).toFixed(2)}%).`,
+}));
 
 function TokenCalculator() {
   const [amount, setAmount] = useState('100');
-  const [days, setDays] = useState<7 | 14>(7);
+  const [days, setDays] = useState<LockTermDays>(7);
   const parsed = Number.parseFloat(amount);
   const initial = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  const rate = days === 7 ? 0.07 : 0.14;
-  const appreciation = initial * rate;
-  const resale = initial + appreciation;
+  const term = LOCK_TERMS.find((t) => t.days === days) ?? LOCK_TERMS[0];
+  const resale = targetResale(initial, days);
+  const appreciation = Math.round((resale - initial) * 100) / 100;
   const fmt = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
@@ -26,8 +29,9 @@ function TokenCalculator() {
         <h2 className="font-display font-semibold text-white">Target calculator</h2>
       </div>
       <p className="text-sm text-mist">
-        Plain arithmetic at maturity only — no daily accrual. Enter an amount, pick a cycle, and see
-        the target math. Targets are labels, not promises; sale requires a willing buyer.
+        Plain arithmetic at maturity only — no daily accrual. Enter an amount, pick a term, and see
+        the target math. Targets are labels, not promises; sale requires a willing buyer or the
+        company-funded settlement option.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -45,24 +49,19 @@ function TokenCalculator() {
           />
         </div>
         <div>
-          <span className="label" id="calc-cycle-label">Cycle</span>
-          <div className="flex gap-2" role="group" aria-labelledby="calc-cycle-label">
-            <button
-              type="button"
-              onClick={() => setDays(7)}
-              aria-pressed={days === 7}
-              className={days === 7 ? 'btn-primary' : 'btn-secondary'}
-            >
-              7 days (+7%)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDays(14)}
-              aria-pressed={days === 14}
-              className={days === 14 ? 'btn-primary' : 'btn-secondary'}
-            >
-              14 days (+14%)
-            </button>
+          <span className="label" id="calc-cycle-label">Term</span>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby="calc-cycle-label">
+            {LOCK_TERMS.map((t) => (
+              <button
+                key={t.days}
+                type="button"
+                onClick={() => setDays(t.days)}
+                aria-pressed={days === t.days}
+                className={days === t.days ? 'btn-primary' : 'btn-secondary'}
+              >
+                {t.days} days (+{(t.termRate * 100).toFixed(2)}%)
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -85,8 +84,9 @@ function TokenCalculator() {
         </div>
       </dl>
       <p className="text-xs text-mist">
-        Illustration — targets, not guarantees. {days}-day math: resale = amount × {days === 7 ? '1.07' : '1.14'} at
-        maturity. Automatic listing is not automatic sale; unsold stays unsold.
+        Illustration — targets, not guarantees. {days}-day math: resale = amount × {term.target.toFixed(3)} at
+        maturity ({(term.ratePerDay * 100).toFixed(2)}% per day, simple). Automatic listing is not
+        automatic sale; unsold stays unsold.
       </p>
     </section>
   );
@@ -107,19 +107,19 @@ export default function TokensPage() {
           Token cycles
         </h1>
         <p className="text-sm text-mist">
-          Two lock cycles. Purchase at the sticker price, hold through the lock, mature to a{' '}
-          <strong className="text-white">TARGET</strong> price. Targets are labels on math — not
-          returns, not promises.
+          Three lock terms. Purchase at the sticker price, hold through the lock, and settle at a{' '}
+          <strong className="text-white">TARGET</strong> price through the marketplace or the
+          company-funded option. Targets are labels on math — not returns, not promises.
         </p>
-        <div className="rounded-lg border border-line/10 bg-coal p-4 space-y-2" aria-label="Auto-list mechanics">
-          <h2 className="font-display font-semibold text-white">Auto-list mechanics</h2>
+        <div className="rounded-lg border border-line/10 bg-coal p-4 space-y-2" aria-label="Settlement mechanics">
+          <h2 className="font-display font-semibold text-white">Maturity &amp; settlement</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm text-mist">
-            <li>Locked for the exact period you selected (7 or 14 days) — no mid-lock withdrawal.</li>
-            <li>At maturity, immediate listing on the token market at the 107% / 114% target price.</li>
-            <li>Proceeds credited per portion as each portion is bought. Unsold stays unsold.</li>
+            <li>Locked for the exact term you selected (7, 14 or 30 days) — no mid-lock withdrawal.</li>
+            <li>Marketplace option: at maturity the position is listed at its target price. Proceeds credit per portion as each portion is bought.</li>
+            <li>Company-funded option: selected before locking; 10% of the projected profit is charged and the company reserve settles the position at maturity.</li>
+            <li>Unsold stays unsold; a listing is not a sale until a buyer pays.</li>
           </ul>
         </div>
-        LiveChip is not available yet.
         {mod.state === 'loading' && <p role="status">Loading token definitions…</p>}
         {mod.state === 'live' && defs.length > 0 && (
           <table className="table">
@@ -155,7 +155,7 @@ export default function TokensPage() {
             <table className="table" aria-label="Example target math">
               <thead>
                 <tr>
-                  <th scope="col">Cycle</th>
+                  <th scope="col">Term</th>
                   <th scope="col">Purchase</th>
                   <th scope="col">Target</th>
                   <th scope="col">Note</th>
@@ -167,7 +167,7 @@ export default function TokensPage() {
                     <td className="text-white">{e.days}-day lock</td>
                     <td>{e.buy}</td>
                     <td>
-                      <span className="text-gold">{e.target}</span>
+                      <span className="text-gold">{e.target.toFixed(2)}</span>
                     </td>
                     <td>{e.note}</td>
                   </tr>
@@ -175,9 +175,9 @@ export default function TokensPage() {
               </tbody>
             </table>
             <p className="alert-warn" role="note">
-              Simple-math note: 100 → 107 and 100 → 114 are arithmetic on example sticker prices
-              (100 + 7, 100 + 14). They are TARGETS, not yields and not guarantees. Target prices
-              are not guaranteed — sale requires a willing buyer; unsold stays unsold.
+              Simple-math note: the figures above are arithmetic on example sticker prices using the
+              approved daily target rates. They are TARGETS, not yields and not guarantees. Target
+              prices are not guaranteed — sale requires a willing buyer; unsold stays unsold.
             </p>
           </div>
         )}
@@ -195,4 +195,3 @@ export default function TokensPage() {
     </div>
   );
 }
-

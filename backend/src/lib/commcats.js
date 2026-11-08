@@ -2,7 +2,8 @@
 // Generation gate: maxGen = sponsor stage (stage_gens map 1->1 .. 5->5).
 // Rate capped at sponsor-stage rule; calculations store category+generation+rule_version.
 // All seed rules/categories are active=false so the engine records nothing payable.
-const STAGE_GENS = Object.freeze({ 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 });
+// Approved plan: three referral generations maximum, unlocked progressively by stage.
+const STAGE_GENS = Object.freeze({ 1: 1, 2: 2, 3: 3, 4: 3, 5: 3 });
 
 function maxGenForStage(stage) {
   const n = Number(stage);
@@ -44,7 +45,7 @@ async function calculateGatedForOrder(orderId, client) {
   const anc = await db.query(
     `select rc.ancestor_id, rc.depth, coalesce(u.stage, 1) as stage
      from referral_closure rc join users u on u.id = rc.ancestor_id
-     where rc.descendant_id = $1 and rc.depth between 1 and 5 order by rc.depth asc`,
+     where rc.descendant_id = $1 and rc.depth between 1 and 3 order by rc.depth asc`,
     [order.buyer_id]
   );
   const eligible = filterEligibleAncestors(anc.rows);

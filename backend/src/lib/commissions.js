@@ -19,9 +19,9 @@ async function calculateForOrder(orderId, client) {
   const ref = await db.query(`select 1 from refunds where order_id = $1 limit 1`, [orderId]);
   if (ref.rowCount) return [];
 
-  // Walk referral_closure ancestors of the buyer (depth 1..5)
+  // Walk referral_closure ancestors of the buyer (approved plan: depth 1..3)
   const anc = await db.query(
-    `select ancestor_id, depth from referral_closure where descendant_id = $1 and depth between 1 and 5 order by depth asc`,
+    `select ancestor_id, depth from referral_closure where descendant_id = $1 and depth between 1 and 3 order by depth asc`,
     [order.buyer_id]
   );
   if (!anc.rowCount) return [];

@@ -458,6 +458,9 @@ const tokenHoldings = pgTable('token_holdings', {
   costUsdt: numeric('cost_usdt', { precision: 19, scale: 4 }).notNull(),
   lockDays: integer('lock_days').notNull(),
   status: varchar('status', { length: 24 }).notNull().default('locked'),
+  // 'marketplace' = list at maturity; 'company_reserve' = company-funded settlement
+  // with a 10% charge on profit (selected before locking).
+  settlementOption: varchar('settlement_option', { length: 24 }).notNull().default('marketplace'),
   purchasedAt: timestamp('purchased_at', { withTimezone: true }).notNull().defaultNow(),
   maturesAt: timestamp('matures_at', { withTimezone: true }).notNull(),
   listingId: uuid('listing_id'),
@@ -552,7 +555,9 @@ const insurancePolicies = pgTable('insurance_policies', {
 
 const insuranceClaims = pgTable('insurance_claims', {
   id: uuid('id').primaryKey().defaultRandom(),
-  policyId: uuid('policy_id').notNull().references(() => insurancePolicies.id, { onDelete: 'cascade' }),
+  // Account-level insurance: claims are tied to the member account, not a token
+  // holding, so policy_id is optional (legacy per-token policies only).
+  policyId: uuid('policy_id').references(() => insurancePolicies.id, { onDelete: 'set null' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   amount: numeric('amount', { precision: 19, scale: 4 }).notNull(),                  // claim amount USDT
   reason: varchar('reason', { length: 64 }).notNull(),                               // unsold_at_maturity | partial_fill_loss | platform_fault

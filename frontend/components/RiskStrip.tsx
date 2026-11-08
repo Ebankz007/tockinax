@@ -3,7 +3,8 @@ import Link from 'next/link';
 /** Safeguard strip reused on the home hero and every money page. */
 const ITEMS = [
   'Target prices are not guaranteed — sale requires a willing buyer; unsold stays unsold',
-  'Commissions pay only on verified sales after approval and funding — eight approved categories, payouts gated',
+  'Referral rewards cover three generations only, pay only on eligible registrations after approval and funding',
+  'Insurance is account-level only; it is never attached to a token, holding, or lock term.',
   'USDT TRC20 only via Pay2Crypto sandbox until approvals. Never share private keys.',
   'Orders are recorded, not held — no escrow is implied.',
 ];

@@ -14,7 +14,6 @@ type StageCfg = {
   min?: string | number | null;
   max?: string | number | null;
   upgrade_fee?: string | number | null;
-  renewal_fee?: string | number | null;
   fee?: string | number | null;
 };
 
@@ -74,7 +73,7 @@ function StagesInner() {
         {mod.state === 'forbidden' && <p className="alert-error" role="alert">Gated: super_admin role required.</p>}
         {mod.state === 'error' && <p className="alert-error" role="alert">{mod.message}</p>}
         <table className="table">
-          <thead><tr><th scope="col">Stage</th><th scope="col">Buy limits</th><th scope="col">Upgrade fee</th><th scope="col">Renewal fee</th><th scope="col">Edit</th></tr></thead>
+          <thead><tr><th scope="col">Stage</th><th scope="col">Buy limits</th><th scope="col">Entry fee</th><th scope="col">Edit</th></tr></thead>
           <tbody>
             {rows.map((s, i) => {
               const n = s.stage ?? s.n ?? i + 1;
@@ -84,7 +83,6 @@ function StagesInner() {
                   <td className="text-white font-semibold">{s.name || `Stage ${n}`}</td>
                   <td>{limit(s)}</td>
                   <td className="text-gold">{fee(s.upgrade_fee ?? s.fee)}</td>
-                  <td className="text-gold">{fee(s.renewal_fee)}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
                       <label className="sr-only" htmlFor={`fee-${n}`}>Fee for stage {n}</label>

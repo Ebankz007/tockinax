@@ -115,10 +115,22 @@ async function availableSimUsdt(db, userId) {
       [userId]
     )
     .catch(() => ({ rows: [{ tot: '0' }] }));
+  // Company-funded settlement proceeds (paid manually from the reserve).
+  const company = await db
+    .query(
+      `select coalesce(sum(e.credit - e.debit),0)::text as bal
+       from ledger_entries e
+       join ledger_transactions t on t.id = e.tx_id
+       join token_holdings h on h.id = t.source_id
+       where e.account = 'LIAB:sim_usdt' and t.source_type = 'company_settlement' and h.user_id = $1`,
+      [userId]
+    )
+    .catch(() => ({ rows: [{ bal: '0' }] }));
   return funding
     .minus(new Decimal(spent.rows[0].tot || 0))
     .minus(new Decimal(bought.rows[0].tot || 0))
     .plus(new Decimal(sold.rows[0].tot || 0))
+    .plus(new Decimal(company.rows[0]?.bal || 0))
     .minus(new Decimal(locked.rows[0].tot || 0));
 }
 

@@ -1,9 +1,9 @@
-// Insurance — real-money protection for token positions.
-// Policies are purchased by members; claims are reviewed and paid by admin.
+// Insurance — ACCOUNT-LEVEL membership. Insurance is activated once on the
+// member account (POST /auth/insurance/activate) and is not tied to a token,
+// holding, or lock term. Claims are reviewed and paid by admin.
 // All money movement is balanced through the double-entry ledger.
 const express = require('express');
 const { z } = require('zod');
-const crypto = require('crypto');
 const { getPool } = require('../lib/db');
 const { authRequired } = require('../middleware/auth');
 const { postBalanced, Decimal } = require('../lib/ledger');
@@ -21,18 +21,22 @@ async function audit(req, action, targetType, targetId, diff) {
 
 // ---- Member routes ----
 
-// GET /insurance/coverage — active policies for the current user
+// GET /insurance/coverage — account-level insurance membership status
 router.get('/coverage', async (req, res, next) => {
   try {
     const r = await getPool().query(
-      `select p.*, h.cost_usdt, h.lock_days, h.status as holding_status, h.matures_at
-       from insurance_policies p
-       left join token_holdings h on h.id = p.holding_id
-       where p.user_id = $1
-       order by p.created_at desc`,
+      `select insurance_active, insurance_activated_at from users where id=$1`,
       [req.user.id]
     );
-    res.json({ items: r.rows });
+    const u = r.rows[0] || {};
+    res.json({
+      account: {
+        insurance_active: !!u.insurance_active,
+        insurance_activated_at: u.insurance_activated_at || null,
+      },
+      items: [],
+      note: 'Insurance is account-level. It is not tied to any token, holding, or lock term.',
+    });
   } catch (e) { next(e); }
 });
 
@@ -40,87 +44,26 @@ router.get('/coverage', async (req, res, next) => {
 router.get('/claims/mine', async (req, res, next) => {
   try {
     const r = await getPool().query(
-      `select c.*, p.token_code, p.coverage_amount
-       from insurance_claims c
-       join insurance_policies p on p.id = c.policy_id
-       where c.user_id = $1
-       order by c.created_at desc`,
+      `select * from insurance_claims where user_id = $1 order by created_at desc`,
       [req.user.id]
     );
     res.json({ items: r.rows });
   } catch (e) { next(e); }
 });
 
-// POST /insurance/purchase {token_code, holding_id, coverage_amount, premium_paid, expires_at, terms}
-router.post('/purchase', async (req, res, next) => {
-  try {
-    const b = z.object({
-      token_code: z.string().min(1),
-      holding_id: z.string().uuid().optional(),
-      coverage_amount: z.string().regex(/^\d+(\.\d{1,4})?$/),
-      premium_paid: z.string().regex(/^\d+(\.\d{1,4})?$/).optional(),
-      expires_at: z.string().datetime().optional(),
-      terms: z.string().max(2000).optional().default(''),
-    }).parse(req.body);
-
-    const pool = getPool();
-    // Require insurance membership activation before purchasing coverage
-    const u = await pool.query(`select insurance_active from users where id=$1`, [req.user.id]);
-    if (!u.rowCount || !u.rows[0].insurance_active) return res.status(403).json({ error: 'insurance_not_active', message: 'Insurance membership not activated. Please activate insurance before purchasing coverage.' });
-
-    const coverage = new Decimal(b.coverage_amount);
-    if (coverage.lte(0)) return res.status(400).json({ error: 'invalid_coverage' });
-
-    // Calculate premium: 10% of coverage amount (company profit ahead)
-    const premium = coverage.div(new Decimal('10')).round(4, Decimal.ROUND_DOWN);
-    const netCoverage = coverage.sub(premium);
-
-    // If premium_paid was explicitly provided (for top-ups), use that; otherwise calculate 10%
-    const actualPremium = b.premium_paid ? new Decimal(b.premium_paid) : premium;
-    if (actualPremium.lte(0)) return res.status(400).json({ error: 'invalid_premium' });
-
-    // Verify the holding exists and belongs to the user (if provided)
-    if (b.holding_id) {
-      const h = await pool.query(`select * from token_holdings where id=$1 and user_id=$2`, [b.holding_id, req.user.id]);
-      if (!h.rowCount) return res.status(404).json({ error: 'holding_not_found' });
-    }
-
-    const idem = `ins:purchase:${req.user.id}:${crypto.randomBytes(8).toString('hex')}`;
-    const expiresAt = b.expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    // Deduct premium from member's SIM-USDT balance via ledger
-    try {
-      await postBalanced({
-        sourceType: 'insurance_premium',
-        sourceId: idem,
-        currency: 'USDT',
-        memo: `insurance premium ${idem} - 10% profit share`,
-        idempotencyKey: `ins:premium:${idem}`,
-        lines: [
-          { account: 'LIAB:sim_usdt', debit: actualPremium.toFixed(4) },
-          { account: 'REV:insurance_premiums', credit: actualPremium.toFixed(4) },
-        ],
-      });
-    } catch (e) {
-      return res.status(502).json({ error: 'ledger_error', message: e.message });
-    }
-
-    const p = await pool.query(
-      `insert into insurance_policies (user_id, token_code, holding_id, coverage_amount, premium_paid, expires_at, terms, status)
-       values ($1,$2,$3,$4,$5,$6,$7,'active') returning *`,
-      [req.user.id, b.token_code, b.holding_id || null, coverage.toFixed(4), actualPremium.toFixed(4), expiresAt, b.terms]
-    );
-
-    await audit(req, 'insurance.purchase', 'insurance_policy', p.rows[0].id, { coverage: b.coverage_amount, premium: actualPremium.toFixed(4), netCoverage: netCoverage.toFixed(4) });
-    res.status(201).json({ policy: p.rows[0], premiumRate: '10%', netCoverage: netCoverage.toFixed(4) });
-  } catch (e) { next(e); }
+// POST /insurance/purchase — RETIRED. Insurance is activated on the account,
+// never purchased per token/holding/lock term.
+router.post('/purchase', (_req, res) => {
+  res.status(410).json({
+    error: 'account_level_insurance_only',
+    message: 'Insurance is activated once on your account via POST /auth/insurance/activate. It is not purchased per token or per lock term.',
+  });
 });
 
-// POST /insurance/claim {policy_id, amount, reason, evidence_ref}
+// POST /insurance/claim {amount, reason, evidence_ref} — account-level claim
 router.post('/claim', async (req, res, next) => {
   try {
     const b = z.object({
-      policy_id: z.string().uuid(),
       amount: z.string().regex(/^\d+(\.\d{1,4})?$/),
       reason: z.enum(['unsold_at_maturity', 'partial_fill_loss', 'platform_fault']),
       evidence_ref: z.string().max(500).optional().default(''),
@@ -130,22 +73,19 @@ router.post('/claim', async (req, res, next) => {
     const claimAmt = new Decimal(b.amount);
     if (claimAmt.lte(0)) return res.status(400).json({ error: 'invalid_amount' });
 
-    // Verify policy belongs to user and is active
-    const p = await pool.query(`select * from insurance_policies where id=$1 and user_id=$2 and status='active'`, [b.policy_id, req.user.id]);
-    if (!p.rowCount) return res.status(404).json({ error: 'policy_not_found_or_inactive' });
-    const policy = p.rows[0];
+    // Account-level gate: the member must have activated insurance on the account.
+    const u = await pool.query(`select insurance_active from users where id=$1`, [req.user.id]);
+    if (!u.rowCount || !u.rows[0].insurance_active) {
+      return res.status(403).json({ error: 'insurance_not_active', message: 'Activate insurance on your account before filing a claim.' });
+    }
 
-    if (claimAmt.greaterThan(new Decimal(policy.coverage_amount)))
-      return res.status(422).json({ error: 'claim_exceeds_coverage', coverage: policy.coverage_amount });
-
-    const idem = `ins:claim:${req.user.id}:${crypto.randomBytes(8).toString('hex')}`;
     const c = await pool.query(
       `insert into insurance_claims (policy_id, user_id, amount, reason, evidence_ref, status)
-       values ($1,$2,$3,$4,$5,'pending') returning *`,
-      [b.policy_id, req.user.id, claimAmt.toFixed(4), b.reason, b.evidence_ref]
+       values (null,$1,$2,$3,$4,'pending') returning *`,
+      [req.user.id, claimAmt.toFixed(4), b.reason, b.evidence_ref]
     );
 
-    await audit(req, 'insurance.claim', 'insurance_claim', c.rows[0].id, { policy: b.policy_id, amount: b.amount, reason: b.reason });
+    await audit(req, 'insurance.claim', 'insurance_claim', c.rows[0].id, { amount: b.amount, reason: b.reason });
     res.status(201).json({ claim: c.rows[0] });
   } catch (e) { next(e); }
 });
@@ -182,7 +122,7 @@ router.admin.get('/claims', async (req, res, next) => {
     const r = await getPool().query(
       `select c.*, p.token_code, p.coverage_amount, u.email as user_email
        from insurance_claims c
-       join insurance_policies p on p.id = c.policy_id
+       left join insurance_policies p on p.id = c.policy_id
        join users u on u.id = c.user_id
        order by c.created_at desc limit 200`
     );
@@ -205,19 +145,17 @@ router.admin.post('/claims/:id/review', async (req, res, next) => {
     if (claim.status !== 'pending') return res.status(409).json({ error: 'bad_state', status: claim.status });
 
     if (b.decision === 'reject') {
-      await pool.query(`update insurance_claims set status='rejected', reviewed_by=$1, reviewed_at=now(), updated_at=now() where id=$2`,
+      await pool.query(`update insurance_claims set status='rejected', reviewed_by=$1, reviewed_at=now() where id=$2`,
         [req.user.id, claim.id]);
       await audit(req, 'insurance.claim.reject', 'insurance_claim', claim.id, { note: b.note });
       return res.json({ ok: true, status: 'rejected' });
     }
 
-    // approve — book liability + create payout request
-    const policy = await pool.query(`select * from insurance_policies where id=$1`, [claim.policy_id]);
-    if (!policy.rowCount) return res.status(404).json({ error: 'policy_not_found' });
-    const pol = policy.rows[0];
-
-    // Mark policy as claimed
-    await pool.query(`update insurance_policies set status='claimed' where id=$1`, [claim.policy_id]);
+    // approve — book liability + create payout request (account-level claims
+    // have no per-token policy; legacy policy claims are marked claimed if present)
+    if (claim.policy_id) {
+      await pool.query(`update insurance_policies set status='claimed' where id=$1`, [claim.policy_id]);
+    }
 
     // Book insurance liability
     const idem = `ins:claimpay:${claim.id}`;

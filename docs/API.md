@@ -149,24 +149,45 @@ Record-only until `feature_flags.live_payments=true`. With live off, events are 
 `cors_origin_denied` 403 · `file_too_large` 413 · `file_type_denied`/`mime_mismatch` 400 ·
 `idempotency_key_required` 400 · `internal` 500.
 
-## Token pilot (SIMULATED — TKX-SIM, market-clearing, unsold stays unsold)
+## Token module (TKX, market-clearing, unsold stays unsold, account-level insurance)
 
 | Method + path | Auth | Body → response |
 |---|---|---|
-| `POST /api/v1/tokens/purchase` | member | `{amount_usdt\|amount, lock_days\|cycle_days: 7\|14}` → 201 `{holding, cycle, pricing}`; 403 `insurance_not_active`; 422 `insufficient_balance`; target = simple cost×(1+1%×days) |
-| `GET /api/v1/tokens/holdings` (=`/holdings/mine`) | member | `{items:[{qty, cost_usdt, lock_days, status, matures_at}]}` |
+| `POST /api/v1/tokens/purchase` | member | `{amount_usdt\|amount, lock_days\|cycle_days: 7\|14\|30, settlement_option?: marketplace\|company_reserve}` → 201 `{holding (pending_approval), pricing}`; 403 `insurance_not_active`; 422 `insufficient_balance`; target = simple cost×(1+rate×days) |
+| `GET /api/v1/tokens/holdings` (=`/holdings/mine`) | member | `{items:[{qty, cost_usdt, lock_days, status, settlement_option, matures_at}]}` |
 | `GET /api/v1/tokens/cycles` (=`/cycles/mine`) | member | `{items, eligibility:{success_7d/14d, required_7d/14d}}` — success needs settled resale, never time alone |
-| `GET /api/v1/tokens/stage/me` (=`/stages/current`) | member | `{current, limits, requirements, upgrade:{fee\|fee_unset}, renewal}` — NULL = TBD placeholder |
-| `POST /api/v1/tokens/stage/request` · `/stages/upgrade` · `/stages/renew` | member | `{kind}` → 201 pending or 409 `fee_unset` / `max_stage` |
+| `GET /api/v1/tokens/stage/me` (=`/stages/current`) | member | `{current, limits, requirements, upgrade:{fee\|fee_unset}, renewal}` — `renewal` is 409 `fee_unset` (plan publishes no renewal fee) |
+| `POST /api/v1/tokens/stage/request` · `/stages/upgrade` · `/stages/renew` | member | `{kind}` → 201 pending (entry fee) or 409 `fee_unset` / `max_stage` |
 | `GET /api/v1/tokens/stages` · `/stages/config` | member | definitions (read-only; `PUT` → 409 `configuration_locked`) |
-| `GET /api/v1/tokens/definitions` · `/pricing-versions` · `/categories` | member | TKX-SIM spec, versioned simple-pricing rows, 8 DISABLED categories |
+| `GET /api/v1/tokens/definitions` · `/pricing-versions` · `/categories` | member | TKX spec, versioned simple-pricing rows (7/14/30), 3 DISABLED referral categories |
 | `GET /api/v1/tokens/commissions` | member | by category+generation (empty until rules approved+funded) |
 | `GET /api/v1/tokens/statement` | member | `{lines}` JSON for CSV export |
-| `GET /api/v1/tokens/admin/kpis` | staff | counts + `simulated:true`; member → 403 |
+| `GET /api/v1/tokens/admin/kpis` | staff | counts; member → 403 |
 | `GET /api/v1/tokenmarket/listings` | member | open/partial, search/sort/page; remaining bars |
 | `POST /api/v1/tokenmarket/listings/:id/buy` | member | `{qty}` (TKX units) → 201 fill + `remaining_qty`; 409 `insufficient_remaining`; oversell-safe (`FOR UPDATE`) |
 | `GET /api/v1/tokenmarket/fills/mine` · `/proceeds` | member | receipts + unsold balances (unsold stays visible) |
 | `GET /api/v1/tokenmarket/admin/listings` · `POST .../decision {approve}` | finance | oversight; `approve:false` cancels open/partial + audit |
+
+### Account-level insurance (never per token)
+
+| Method + path | Auth | Notes |
+|---|---|---|
+| `POST /api/v1/auth/insurance/activate` | member | `{insurance_type?}` → activates insurance on the account |
+| `GET /api/v1/auth/insurance/status` | member | `{insurance_active, insurance_activated_at}` |
+| `POST /api/v1/insurance/purchase` | member | retired → 410 `account_level_insurance_only` |
+| `GET /api/v1/insurance/coverage` · `POST /api/v1/insurance/claims` | member | account-level coverage + claims |
+| `GET /api/v1/admin/insurance-members` · `POST /admin/users/:id/insurance {active}` | super_admin | grant/revoke account insurance |
+| `GET /api/v1/admin/insurance/claims` · `POST /admin/insurance/claims/:id/review {approve\|reject}` | super_admin | claim review |
+
+### Purchase + company-settlement approvals (super_admin)
+
+| Method + path | Notes |
+|---|---|
+| `GET /api/v1/admin/token-purchases?status=pending_approval` | queued purchases with member + insurance state |
+| `POST /api/v1/admin/token-purchases/:id/approve` | posts ledger debit, `locked`, resets lock start, creates cycle |
+| `POST /api/v1/admin/token-purchases/:id/reject` | cancels the holding |
+| `GET /api/v1/admin/token-settlements?status=settlement_pending` | company-reserve holdings awaiting payout |
+| `POST /api/v1/admin/token-settlements/:id/approve` | pays cost + 90% profit, charges 10% profit, balanced ledger |
 
 ## Pay2Crypto USDT deposits + withdrawals (sandbox-first; live gated OFF)
 

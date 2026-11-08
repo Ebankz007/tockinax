@@ -6,9 +6,10 @@ import Empty from '@/components/Empty';
 import RiskStrip from '@/components/RiskStrip';
 import ModuleEmpty from '@/components/ModuleEmpty';
 import Countdown from '@/components/Countdown';
+import { LOCK_TERMS, targetResale, usdt, type LockTermDays } from '@/lib/plan';
 import { api, errMsg, fetchModule, listOf, num, ApiError, type Holding, type ModuleState } from '@/lib/api';
 
-const TARGETS: Record<number, number> = { 7: 107, 14: 114 };
+type SettlementOption = 'marketplace' | 'company_reserve';
 
 function Portfolio({ reloadKey }: { reloadKey: number }) {
   const [mod, setMod] = useState<ModuleState<unknown>>({ state: 'loading' });
@@ -23,7 +24,7 @@ function Portfolio({ reloadKey }: { reloadKey: number }) {
   if (mod.state === 'forbidden') return <p className="alert-error" role="alert">Gated: please log in again.</p>;
   if (mod.state === 'error') return <p className="alert-error" role="alert">{mod.message}</p>;
   const rows = listOf<Holding>(mod.data);
-  if (rows.length === 0) return <Empty title="No holdings yet." hint="Use the buy & lock form to open your first pilot position." />;
+  if (rows.length === 0) return <Empty title="No holdings yet." hint="Use the buy & lock form to open your first position." />;
   return (
     <div className="overflow-x-auto">
       <table className="table">
@@ -33,6 +34,7 @@ function Portfolio({ reloadKey }: { reloadKey: number }) {
             <th scope="col">Qty</th>
             <th scope="col">Cost</th>
             <th scope="col">Lock</th>
+            <th scope="col">Settlement</th>
             <th scope="col">Matures in</th>
             <th scope="col">Status</th>
           </tr>
@@ -40,10 +42,11 @@ function Portfolio({ reloadKey }: { reloadKey: number }) {
         <tbody>
           {rows.map((h, i) => (
             <tr key={h.id || i}>
-              <td className="text-white">{h.token_code || 'Pilot token'}</td>
+              <td className="text-white">{h.token_code || 'TKX'}</td>
               <td>{String(h.qty ?? h.quantity ?? '—')}</td>
-              <td>{String(h.cost ?? h.cost_basis ?? '—')}</td>
-              <td>{h.cycle_days ? `${h.cycle_days}-day` : h.lock || '—'}</td>
+              <td>{String(h.cost_usdt ?? h.cost ?? h.cost_basis ?? '—')}</td>
+              <td>{h.lock_days ? `${h.lock_days}-day` : h.cycle_days ? `${h.cycle_days}-day` : '—'}</td>
+              <td>{h.settlement_option === 'company_reserve' ? 'Company reserve' : 'Marketplace'}</td>
               <td><Countdown at={h.matures_at} /></td>
               <td>{h.lock_status || h.lock || h.status || 'locked'}</td>
             </tr>
@@ -82,6 +85,7 @@ function InsuranceCard({ active, onChanged }: { active: boolean | null; onChange
         <>
           <p className="alert-warn" role="note">
             Insurance is not active on your account. Activate it before you can purchase tokens.
+            Insurance is account-level — it is not tied to a token or a lock term.
           </p>
           {error && <p className="alert-error" role="alert">{error}</p>}
           <button className="btn-primary" onClick={activate} disabled={busy}>
@@ -95,20 +99,28 @@ function InsuranceCard({ active, onChanged }: { active: boolean | null; onChange
 
 function BuyLock({ onDone, insuranceActive }: { onDone: () => void; insuranceActive: boolean | null }) {
   const [amount, setAmount] = useState('100');
-  const [cycle, setCycle] = useState<7 | 14>(7);
+  const [cycle, setCycle] = useState<LockTermDays>(7);
+  const [settlement, setSettlement] = useState<SettlementOption>('marketplace');
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState('');
   const [error, setError] = useState('');
   const [deploying, setDeploying] = useState(false);
 
+  const term = LOCK_TERMS.find((t) => t.days === cycle) ?? LOCK_TERMS[0];
   const target = useMemo(() => {
     const a = num(amount);
     if (!a) return 0;
-    // Simple-math preview scaled from the 100-unit example rate.
-    const rate = TARGETS[cycle] / 100;
-    return Math.round(a * rate * 100) / 100;
+    return targetResale(a, cycle);
   }, [amount, cycle]);
+  const settlementPreview = useMemo(() => {
+    const a = num(amount);
+    if (!a || settlement !== 'company_reserve') return null;
+    const total = targetResale(a, cycle);
+    const profit = Math.round((total - a) * 100) / 100;
+    const fee = Math.round(profit * 0.1 * 100) / 100;
+    return { total, profit, fee, net: Math.round((total - fee) * 100) / 100 };
+  }, [amount, cycle, settlement]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,8 +129,13 @@ function BuyLock({ onDone, insuranceActive }: { onDone: () => void; insuranceAct
     setError('');
     setDeploying(false);
     try {
-      await api.post('/tokens/purchase', { amount: num(amount), cycle_days: cycle, agreed_risk: agreed });
-      setOk(`Submitted ${amount} for ${cycle} days. The system admin will review and activate your purchase shortly.`);
+      await api.post('/tokens/purchase', {
+        amount: num(amount),
+        cycle_days: cycle,
+        settlement_option: settlement,
+        agreed_risk: agreed,
+      });
+      setOk(`Submitted ${amount} for ${cycle} days (${settlement === 'company_reserve' ? 'company-funded settlement' : 'marketplace settlement'}). The system admin will review and activate your purchase shortly.`);
       onDone();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status >= 500)) {
@@ -142,27 +159,54 @@ function BuyLock({ onDone, insuranceActive }: { onDone: () => void; insuranceAct
         <ModuleEmpty title="Purchase module deploying." hint="Your order was not placed — the tokens backend is not reachable yet. Nothing moved." />
       )}
       <div>
-        <label className="label" htmlFor="buy-amount">Amount (pilot units)</label>
+        <label className="label" htmlFor="buy-amount">Amount (USDT)</label>
         <input id="buy-amount" className="input" inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} min="1" />
       </div>
       <fieldset>
-        <legend className="label">Lock cycle</legend>
-        <div className="flex gap-2" role="radiogroup" aria-label="Lock cycle">
-          {[7, 14].map((d) => (
-            <label key={d} className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm ${cycle === d ? 'border-gold bg-brand-500/10 text-white' : 'border-line/20 text-mist'}`}>
-              <input type="radio" name="cycle" className="sr-only" checked={cycle === d} onChange={() => setCycle(d as 7 | 14)} />
-              {d}-day → TARGET {TARGETS[d]}
+        <legend className="label">Lock term</legend>
+        <div className="flex gap-2" role="radiogroup" aria-label="Lock term">
+          {LOCK_TERMS.map((t) => (
+            <label key={t.days} className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm ${cycle === t.days ? 'border-gold bg-brand-500/10 text-white' : 'border-line/20 text-mist'}`}>
+              <input type="radio" name="cycle" className="sr-only" checked={cycle === t.days} onChange={() => setCycle(t.days)} />
+              {t.days}-day → {usdt(100 * t.target, 2)}
             </label>
           ))}
         </div>
       </fieldset>
+      <fieldset>
+        <legend className="label">Settlement at maturity</legend>
+        <div className="space-y-2" role="radiogroup" aria-label="Settlement option">
+          <label className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${settlement === 'marketplace' ? 'border-gold bg-brand-500/10 text-white' : 'border-line/20 text-mist'}`}>
+            <input type="radio" name="settlement" className="mt-1 accent-[#F0B90B]" checked={settlement === 'marketplace'} onChange={() => setSettlement('marketplace')} />
+            <span>
+              <strong className="text-white">Marketplace</strong> — list at the target price at maturity.
+              A listing is not a sale; unsold stays unsold.
+            </span>
+          </label>
+          <label className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${settlement === 'company_reserve' ? 'border-gold bg-brand-500/10 text-white' : 'border-line/20 text-mist'}`}>
+            <input type="radio" name="settlement" className="mt-1 accent-[#F0B90B]" checked={settlement === 'company_reserve'} onChange={() => setSettlement('company_reserve')} />
+            <span>
+              <strong className="text-white">Company-funded</strong> — the company reserve settles you
+              at maturity; a 10% charge on the projected profit applies.
+            </span>
+          </label>
+        </div>
+      </fieldset>
       <p className="alert-warn" role="note">
-        Target preview: <strong>{target || '—'}</strong> — Target prices are not guaranteed — sale requires a willing buyer; unsold stays unsold.
+        Target preview: <strong>{target ? usdt(target) : '—'} USDT</strong> at {(term.termRate * 100).toFixed(2)}% over {cycle} days
+        ({(term.ratePerDay * 100).toFixed(2)}%/day, simple). Targets are not guaranteed.
       </p>
+      {settlementPreview && (
+        <p className="alert-info" role="note">
+          Company-funded preview: projected profit <strong>{usdt(settlementPreview.profit)}</strong>,
+          10% charge <strong>{usdt(settlementPreview.fee)}</strong>, net maturity amount{' '}
+          <strong>{usdt(settlementPreview.net)}</strong>.
+        </p>
+      )}
       <div className="flex items-start gap-2 text-sm">
         <input id="buy-risk" type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4 accent-[#F0B90B]" required />
         <label htmlFor="buy-risk" className="text-mist">
-          I understand this is not live yet, and I have read the <Link href="/risk" className="text-gold underline">risk disclosure</Link>.
+          I understand the target is not a guarantee, and I have read the <Link href="/risk" className="text-gold underline">risk disclosure</Link>.
         </label>
       </div>
       {insuranceActive === false && (

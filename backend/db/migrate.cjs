@@ -85,14 +85,14 @@ async function main() {
   // Schema `gatedp2p` is PINNED — never rename. All tables live under search_path gatedp2p.
   const tokenDdl = `
   create table if not exists token_definitions (code varchar(32) primary key, name varchar(120) not null, kind varchar(24) not null default 'STANDARD', total_supply numeric(19,4) not null default 0, basis text not null default '', rights text not null default '', active boolean not null default true, created_at timestamptz not null default now());
-  create table if not exists pricing_rules (id uuid primary key default gen_random_uuid(), version integer not null, lock_days integer not null check (lock_days in (7,14)), rate_bps_per_day integer not null, basis varchar(16) not null default 'simple', active boolean not null default true, created_at timestamptz not null default now(), unique (version, lock_days));
-  create table if not exists token_holdings (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, token_code varchar(32) not null references token_definitions(code), qty numeric(19,4) not null, cost_usdt numeric(19,4) not null, lock_days integer not null check (lock_days in (7,14)), status varchar(24) not null default 'locked', purchased_at timestamptz not null default now(), matures_at timestamptz not null, listing_id uuid, created_at timestamptz not null default now());
+  create table if not exists pricing_rules (id uuid primary key default gen_random_uuid(), version integer not null, lock_days integer not null check (lock_days in (7,14,30)), rate_bps_per_day integer not null, basis varchar(16) not null default 'simple', active boolean not null default true, created_at timestamptz not null default now(), unique (version, lock_days));
+  create table if not exists token_holdings (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, token_code varchar(32) not null references token_definitions(code), qty numeric(19,4) not null, cost_usdt numeric(19,4) not null, lock_days integer not null check (lock_days in (7,14,30)), status varchar(24) not null default 'locked', settlement_option varchar(24) not null default 'marketplace', purchased_at timestamptz not null default now(), matures_at timestamptz not null, listing_id uuid, created_at timestamptz not null default now());
   create index if not exists token_holdings_user_idx on token_holdings (user_id);
   create index if not exists token_holdings_status_idx on token_holdings (status);
   create table if not exists insurance_policies (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, token_code varchar(32) not null, holding_id uuid references token_holdings(id) on delete cascade, coverage_amount numeric(19,4) not null, premium_paid numeric(19,4) not null, status varchar(24) not null default 'active', starts_at timestamptz not null default now(), expires_at timestamptz not null, terms text not null default '', created_at timestamptz not null default now());
   create index if not exists insurance_policies_user_idx on insurance_policies (user_id);
   create index if not exists insurance_policies_status_idx on insurance_policies (status);
-  create table if not exists insurance_claims (id uuid primary key default gen_random_uuid(), policy_id uuid not null references insurance_policies(id) on delete cascade, user_id uuid not null references users(id) on delete cascade, amount numeric(19,4) not null, reason varchar(64) not null, evidence_ref text, status varchar(24) not null default 'pending', reviewed_by uuid references users(id), reviewed_at timestamptz, payout_id uuid references payout_requests(id), created_at timestamptz not null default now());
+  create table if not exists insurance_claims (id uuid primary key default gen_random_uuid(), policy_id uuid references insurance_policies(id) on delete set null, user_id uuid not null references users(id) on delete cascade, amount numeric(19,4) not null, reason varchar(64) not null, evidence_ref text, status varchar(24) not null default 'pending', reviewed_by uuid references users(id), reviewed_at timestamptz, payout_id uuid references payout_requests(id), created_at timestamptz not null default now());
   create index if not exists insurance_claims_user_idx on insurance_claims (user_id);
   create index if not exists insurance_claims_status_idx on insurance_claims (status);
   create table if not exists participation_cycles (id uuid primary key default gen_random_uuid(), user_id uuid not null references users(id) on delete cascade, holding_id uuid not null references token_holdings(id) on delete cascade unique, started_at timestamptz not null default now(), matured_at timestamptz, settled_at timestamptz, status varchar(24) not null default 'started', success boolean not null default false, created_at timestamptz not null default now());
@@ -118,6 +118,26 @@ async function main() {
   alter table users add column if not exists insurance_activated_at timestamptz;
   `;
   await pool.query(tokenDdl);
+
+  // ---- Approved-plan migration (2026-11): 30-day lock term + settlement option ----
+  // `create table if not exists` does not alter existing CHECK constraints, so widen
+  // the lock-term constraints explicitly on databases created before the 30-day plan.
+  await pool.query(`
+  do $$ begin
+    if exists (select 1 from pg_constraint where conname='pricing_rules_lock_days_check') then
+      alter table pricing_rules drop constraint pricing_rules_lock_days_check;
+    end if;
+    alter table pricing_rules add constraint pricing_rules_lock_days_check check (lock_days in (7,14,30));
+  exception when duplicate_object then null; end $$;`);
+  await pool.query(`
+  do $$ begin
+    if exists (select 1 from pg_constraint where conname='token_holdings_lock_days_check') then
+      alter table token_holdings drop constraint token_holdings_lock_days_check;
+    end if;
+    alter table token_holdings add constraint token_holdings_lock_days_check check (lock_days in (7,14,30));
+  exception when duplicate_object then null; end $$;`);
+  await pool.query(`alter table token_holdings add column if not exists settlement_option varchar(24) not null default 'marketplace'`);
+  await pool.query(`alter table insurance_claims alter column policy_id drop not null`);
 
   // USDT support (2026-10-16): ISO codes are 3 chars but 'USDT' needs 4.
   // Widen every currency/base/quote column to varchar(8), only if narrower.

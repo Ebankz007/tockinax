@@ -1,17 +1,21 @@
 // Token pricing — SIMPLE interest only, Decimal.js, never float.
 // 1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled.
-// Rule semantics: pricing_rules.rate_bps_per_day is PER-DAY bps (100 = 1%/day).
-//   Term total for 7d  = 100*7  = 700 bps  (7%)  => 100 -> 107
-//   Term total for 14d = 100*14 = 1400 bps (14%) => 100 -> 114
-// Simple, NOT compound: 14d total = cost*(1+0.01*14), never cost*1.01^14.
+// Approved plan: 7 / 14 / 30-day lock terms.
+// Rule semantics: pricing_rules.rate_bps_per_day is PER-DAY bps.
+//   7d  =  60 bps/day => 420 bps  (4.20%)  => 100 -> 104.20
+//   14d =  75 bps/day => 1050 bps (10.50%) => 100 -> 110.50
+//   30d = 100 bps/day => 3000 bps (30.00%) => 100 -> 130.00
+// Simple, NOT compound: total = cost*(1 + rate*days/10000).
 const Decimal = require('decimal.js');
 const { getPool } = require('./db');
+
+const LOCK_DAYS = Object.freeze([7, 14, 30]);
 
 // Pure math — hermetic, no DB. Exported for unit tests.
 function priceSimple(costUsdt, lockDays, rateBpsPerDay) {
   const cost = new Decimal(costUsdt);
   if (cost.lte(0)) throw new Error('invalid_cost');
-  if (![7, 14].includes(lockDays)) throw new Error('invalid_lock_days');
+  if (!LOCK_DAYS.includes(lockDays)) throw new Error('invalid_lock_days');
   const rate = new Decimal(rateBpsPerDay);
   if (rate.isNeg()) throw new Error('invalid_rate');
   // total = cost * (1 + rate*days/10000)
@@ -27,7 +31,7 @@ function priceSimple(costUsdt, lockDays, rateBpsPerDay) {
 
 // DB-backed: reads ACTIVE pricing rule for the lock term. Throws if none.
 async function targetPrice(costUsdt, lockDays, client) {
-  if (![7, 14].includes(lockDays)) throw Object.assign(new Error('invalid_lock_days'), { status: 400 });
+  if (!LOCK_DAYS.includes(lockDays)) throw Object.assign(new Error('invalid_lock_days'), { status: 400 });
   const pool = getPool();
   const db = client || pool;
   const r = await db.query(
@@ -43,8 +47,8 @@ async function targetPrice(costUsdt, lockDays, client) {
 function maturesAt(purchasedAt, lockDays) {
   const base = purchasedAt ? new Date(purchasedAt) : new Date();
   if (Number.isNaN(base.getTime())) throw new Error('invalid_date');
-  if (![7, 14].includes(lockDays)) throw new Error('invalid_lock_days');
+  if (!LOCK_DAYS.includes(lockDays)) throw new Error('invalid_lock_days');
   return new Date(base.getTime() + lockDays * 24 * 60 * 60 * 1000);
 }
 
-module.exports = { priceSimple, targetPrice, maturesAt };
+module.exports = { LOCK_DAYS, priceSimple, targetPrice, maturesAt };

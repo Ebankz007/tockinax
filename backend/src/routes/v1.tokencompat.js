@@ -92,7 +92,7 @@ tokensCompat.get('/stages/current', async (req, res, next) => {
     res.json({ member_no: st.rows[0]?.member_no || null, current: stage,
       limits: d ? { min_buy: d.min_buy, max_buy: d.max_buy } : null,
       requirements: d ? { req_cycles_7d: d.req_cycles_7d, req_cycles_14d: d.req_cycles_14d } : null,
-      upgrade: nextDef ? { to_stage: stage + 1, fee: d ? d.upgrade_fee : null, fee_unset: (d ? d.upgrade_fee : null) == null } : null,
+      upgrade: nextDef ? { to_stage: stage + 1, fee: nextDef.upgrade_fee, fee_unset: nextDef.upgrade_fee == null } : null,
       renewal: d ? { fee: d.renewal_fee, fee_unset: d.renewal_fee == null } : null });
   } catch (e) { next(e); }
 });
@@ -119,11 +119,10 @@ async function stageRequestAs(pool, userId, kind) {
   if (kind === 'upgrade') {
     if (stage >= 5) return { status: 409, body: { error: 'max_stage' } };
     toStage = stage + 1;
-    const nd = await pool.query(`select 1 from stage_definitions where stage=$1`, [toStage]);
+    const nd = await pool.query(`select upgrade_fee from stage_definitions where stage=$1`, [toStage]);
     if (!nd.rowCount) return { status: 404, body: { error: 'stage_not_found' } };
-    // Approved plan: fee to LEAVE the current stage (stage 5 = 0 / cannot leave).
-    const cur = await pool.query(`select * from stage_definitions where stage=$1`, [stage]);
-    fee = cur.rows[0]?.upgrade_fee ?? null;
+    // Approved plan: each fee is paid once when ENTERING that stage.
+    fee = nd.rows[0]?.upgrade_fee ?? null;
   } else {
     const def = await pool.query(`select * from stage_definitions where stage=$1`, [stage]);
     fee = def.rows[0]?.renewal_fee ?? null;

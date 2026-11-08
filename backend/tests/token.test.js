@@ -24,8 +24,13 @@ describe('token pricing (simple interest, Decimal)', () => {
     expect(compound).toBeGreaterThan(114.5);
     expect(Math.abs(compound - parseFloat(simple.total))).toBeGreaterThan(0.5);
   });
+  test('100 USDT / 30d @100bps/day -> 130 total, 1.30 unit', () => {
+    const r = priceSimple('100', 30, 100);
+    expect(r.total).toBe('130.0000');
+    expect(r.unit).toBe('1.3000');
+  });
   test('invalid lock days throw', () => {
-    expect(() => priceSimple('100', 30, 100)).toThrow(/invalid_lock/);
+    expect(() => priceSimple('100', 45, 100)).toThrow(/invalid_lock/);
   });
 });
 
@@ -47,15 +52,20 @@ describe('maturity date math', () => {
 });
 
 describe('stage -> generation map', () => {
-  test('map is 1->1 .. 5->5', () => {
-    expect(STAGE_GENS).toEqual({ 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 });
-    for (let s = 1; s <= 5; s++) expect(maxGenForStage(s)).toBe(s);
+  test('map caps at 3 generations: 1->1, 2->2, 3..5->3', () => {
+    expect(STAGE_GENS).toEqual({ 1: 1, 2: 2, 3: 3, 4: 3, 5: 3 });
+    expect(maxGenForStage(1)).toBe(1);
+    expect(maxGenForStage(2)).toBe(2);
+    expect(maxGenForStage(3)).toBe(3);
+    expect(maxGenForStage(4)).toBe(3);
+    expect(maxGenForStage(5)).toBe(3);
   });
   test('depth beyond stage is ineligible', () => {
     expect(isGenerationEligible(1, 1)).toBe(true);
     expect(isGenerationEligible(1, 2)).toBe(false);
     expect(isGenerationEligible(3, 3)).toBe(true);
     expect(isGenerationEligible(3, 4)).toBe(false);
+    expect(isGenerationEligible(5, 4)).toBe(false);
   });
   test('filterEligibleAncestors keeps only gated depths', () => {
     const rows = [

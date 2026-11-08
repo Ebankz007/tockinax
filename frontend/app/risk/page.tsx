@@ -13,15 +13,15 @@ const SECTIONS: [string, string[]][] = [
     [
       'Target prices are not guaranteed — sale requires a willing buyer; unsold stays unsold.',
       'A matured position that auto-lists may sit unsold indefinitely. There is no buy-back, no floor price, and no promised exit.',
-      'Example math (100 → TARGET 107 / 114) is arithmetic on example sticker prices, not a yield and not a forecast.',
+      'Example math (100 → TARGET 104.20 / 110.50 / 130.00) is arithmetic on example sticker prices, not a yield and not a forecast.',
     ],
   ],
   [
     '3. Commissions and categories',
     [
-      'Commissions pay only on verified sales after approval and funding — the eight categories are the approved plan; payouts stay disabled until then.',
-      'Registration fees, deposits and member transfers never qualify for commissions.',
-      'No category pays for recruitment. Abuse leads to suspension and forfeiture of pending commissions.',
+      'Referral rewards cover three generations only and pay only on eligible registrations after approval and funding; payouts stay disabled until then.',
+      'Each eligible $20 registration allocates $5 to the direct referrer, $2 to the second generation and $1 to the third. Deeper levels never qualify.',
+      'No reward pays for recruitment beyond the published registration split. Abuse leads to suspension and forfeiture of pending rewards.',
     ],
   ],
   [
@@ -50,10 +50,10 @@ const SECTIONS: [string, string[]][] = [
   [
     '7. Token business rules (condensed)',
     [
-      'Account activation: register, then activate membership. Stage limits and stage fees follow the approved compensation plan; activation fees are recorded but not enforced until live.',
-      'Locking options: 7-day (+7%) or 14-day (+14%), 1%/day non-compounded. Example: purchase 100 → TARGET 107 / TARGET 114. Targets, not guarantees.',
-      'Auto-list + partial sales: matured positions auto-list at target; buyers may take small portions; proceeds credited per portion as bought. Automatic listing is not automatic sale; unsold stays unsold.',
-      '42-day rule: 3×14 or 6×7 cumulative locked days qualifies for stage advancement. Then choose upgrade vs renewal — upgrades cost 100 / 250 / 600 / 1500 USDT to leave stages 1–4; renewals are 25 / 50 / 120 / 300 / 600 USDT at the current stage.',
+      'Account activation: register, then activate membership. Stage limits and stage entry fees follow the approved compensation plan; fees are recorded but not enforced until live.',
+      'Locking options: 7-day (0.60%/day, 4.20%), 14-day (0.75%/day, 10.50%) or 30-day (1.00%/day, 30.00%), simple and non-compounded. Example: purchase 100 → TARGET 104.20 / 110.50 / 130.00. Targets, not guarantees.',
+      'Settlement: marketplace listings are not sales; buyers may take small portions and proceeds are credited per portion as bought. Unsold stays unsold. Company-funded settlement charges 10% of the projected profit and is paid from the company reserve after admin approval.',
+      'Stage entry fees: Stage 1 $20 (registration), Stage 2 $25, Stage 3 $50, Stage 4 $100, Stage 5 $250. Each fee is paid once when entering that stage; the approved plan publishes no separate renewal fee.',
       'Stage-limitation rule: when a downline member advances but the sponsor stays, the sponsor keeps their own-stage rate.',
     ],
   ],

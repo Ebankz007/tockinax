@@ -1,22 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { PLATFORM_RULES, targetResale, usdt } from '@/lib/plan';
+import { LOCK_TERMS, targetResale, usdt, type LockTermDays } from '@/lib/plan';
 
 const PRESETS = [100, 500, 1000, 5000];
 
 /**
- * Target-price calculator. The maths is real — 1% per day simple, non-compounded —
- * but a target resale price is not a return until a buyer pays it.
+ * Target-price calculator. The maths is real — the approved daily target rates
+ * are simple and non-compounded — but a target resale price is not a return
+ * until a buyer pays it.
  */
 export default function TargetCalculator() {
   const [amount, setAmount] = useState(1000);
-  const [days, setDays] = useState<7 | 14>(14);
+  const [days, setDays] = useState<LockTermDays>(14);
 
+  const term = LOCK_TERMS.find((t) => t.days === days) ?? LOCK_TERMS[0];
   const safeAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
   const target = targetResale(safeAmount, days);
   const gain = Math.round((target - safeAmount) * 100) / 100;
-  const pct = days === 7 ? 7 : 14;
 
   return (
     <div className="rounded-2xl border border-edge/70 bg-surface p-5 sm:p-6">
@@ -26,16 +27,16 @@ export default function TargetCalculator() {
           <p className="text-xs text-mist">Simple, non-compounded. Target resale price, not a guaranteed payout.</p>
         </div>
         <div className="inline-flex rounded-xl border border-edge/70 bg-ink p-1">
-          {([7, 14] as const).map((d) => (
+          {LOCK_TERMS.map((t) => (
             <button
-              key={d}
+              key={t.days}
               type="button"
-              onClick={() => setDays(d)}
+              onClick={() => setDays(t.days)}
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                days === d ? 'bg-gold text-black' : 'text-mist hover:text-bright'
+                days === t.days ? 'bg-gold text-black' : 'text-mist hover:text-bright'
               }`}
             >
-              {d} days
+              {t.days} days
             </button>
           ))}
         </div>
@@ -83,10 +84,11 @@ export default function TargetCalculator() {
       </dl>
 
       <p id="calc-note" className="mt-4 text-xs leading-relaxed text-mist">
-        {days}-day lock at {PLATFORM_RULES.dailyTargetRate * 100}% per day, simple and
-        non-compounded, gives a <strong className="text-bright">{pct}% target</strong> over the
-        period. This is arithmetic on a sticker price, not a return: the position must find a
-        willing buyer at that price. Unsold stays unsold.
+        {days}-day lock at {(term.ratePerDay * 100).toFixed(2)}% per day, simple and
+        non-compounded, gives a{' '}
+        <strong className="text-bright">{(term.termRate * 100).toFixed(2)}% target</strong> over
+        the period. This is arithmetic on a sticker price, not a return: the position must find
+        a willing buyer at that price. Unsold stays unsold.
       </p>
     </div>
   );

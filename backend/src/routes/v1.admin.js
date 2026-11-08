@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { getPool } = require('../lib/db');
 const { authRequired } = require('../middleware/auth');
 const { postBalanced, Decimal } = require('../lib/ledger');
+const { settleCompanyHolding } = require('../lib/maturity');
 const router = express.Router();
 
 // Admin gate: must hold super_admin role (checked server-side)
@@ -286,7 +287,15 @@ router.post('/token-purchases/:id/approve', async (req, res, next) => {
       await client.query('rollback');
       return res.status(502).json({ error: 'ledger_error', message: e.message });
     }
-    const upd = await client.query(`update token_holdings set status='locked' where id=$1 returning *`, [holding.id]);
+    // The lock starts when the admin activates the purchase, not when the
+    // request was submitted, so recompute purchased_at/matures_at here.
+    const upd = await client.query(
+      `update token_holdings
+          set status='locked', purchased_at=now(),
+              matures_at = now() + ($2::int * interval '1 day')
+        where id=$1 returning *`,
+      [holding.id, holding.lock_days]
+    );
     const c = await client.query(
       `insert into participation_cycles (user_id, holding_id, started_at, status, success)
        values ($1,$2,now(),'started',false) returning *`,
@@ -313,6 +322,43 @@ router.post('/token-purchases/:id/reject', async (req, res, next) => {
     await audit(req, 'token_purchase.reject', 'token_holding', req.params.id, { reason });
     res.json({ holding: r.rows[0] });
   } catch (e) { next(e); }
+});
+
+// ---- Company-funded settlement approvals (manual admin payout) ----
+
+// GET /admin/token-settlements?status=settlement_pending
+router.get('/token-settlements', async (req, res, next) => {
+  try {
+    const status = String(req.query.status || 'settlement_pending');
+    const r = await getPool().query(
+      `select h.*, u.email as user_email,
+              coalesce((select pr.rate_bps_per_day from pricing_rules pr
+                        where pr.active=true and pr.lock_days=h.lock_days and pr.basis='simple'
+                        order by pr.version desc limit 1), 0) as rate_bps_per_day
+       from token_holdings h join users u on u.id = h.user_id
+       where h.status = $1 and h.settlement_option = 'company_reserve'
+       order by h.matures_at asc`,
+      [status]
+    );
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
+// POST /admin/token-settlements/:id/approve — pay from company reserve
+router.post('/token-settlements/:id/approve', async (req, res, next) => {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const out = await settleCompanyHolding(req.params.id, client);
+    await client.query('commit');
+    await audit(req, 'token_settlement.approve', 'token_holding', req.params.id, out);
+    res.json({ ok: true, settlement: out });
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    if (e.status) return res.status(e.status).json({ error: e.message, status: e.status_detail });
+    next(e);
+  } finally { client.release(); }
 });
 
 // GET /admin/insurance-members — accounts with insurance activated

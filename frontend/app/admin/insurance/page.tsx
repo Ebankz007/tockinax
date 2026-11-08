@@ -4,10 +4,18 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import Empty from '@/components/Empty';
-import { api, errMsg, ApiError, type InsurancePolicy, type InsuranceClaim } from '@/lib/api';
+import { api, errMsg, ApiError, type InsuranceClaim } from '@/lib/api';
+
+type InsuranceMember = {
+  id: string;
+  email: string;
+  insurance_active: boolean;
+  insurance_activated_at?: string | null;
+  created_at?: string;
+};
 
 function AdminInsurancePage() {
-  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [members, setMembers] = useState<InsuranceMember[]>([]);
   const [claims, setClaims] = useState<InsuranceClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,11 +25,11 @@ function AdminInsurancePage() {
   async function load() {
     setLoading(true); setError(''); setForbidden(false);
     try {
-      const [p, c] = await Promise.all([
-        api.get<{ items: InsurancePolicy[] }>('/admin/insurance/policies').catch(() => ({ items: [] as InsurancePolicy[] })),
+      const [m, c] = await Promise.all([
+        api.get<{ items: InsuranceMember[] }>('/admin/insurance-members').catch(() => ({ items: [] as InsuranceMember[] })),
         api.get<{ items: InsuranceClaim[] }>('/admin/insurance/claims').catch(() => ({ items: [] as InsuranceClaim[] })),
       ]);
-      setPolicies(p.items);
+      setMembers(m.items);
       setClaims(c.items);
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) {
@@ -51,32 +59,32 @@ function AdminInsurancePage() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-bold text-white">Insurance admin</h1>
+      <p className="text-sm text-mist">
+        Insurance is account-level. It is activated once per member account and is never attached
+        to a token, holding, or lock term. Claims are reviewed here and paid only after approval.
+      </p>
       {error && <p className="alert-error" role="alert">{error}</p>}
       {msg && <p className="alert-ok" role="status">{msg}</p>}
 
       <section className="card space-y-3">
-        <h2 className="font-display font-semibold text-white">Policies</h2>
-        {policies.length === 0 ? <div className="mt-2"><Empty title="No policies." /></div> : (
+        <h2 className="font-display font-semibold text-white">Accounts with insurance</h2>
+        {members.length === 0 ? <div className="mt-2"><Empty title="No insured accounts." /></div> : (
           <table className="table">
             <thead>
               <tr>
-                <th scope="col" className="text-xs text-mist uppercase">User</th>
-                <th scope="col" className="text-xs text-mist uppercase">Token</th>
-                <th scope="col" className="text-xs text-mist uppercase">Coverage</th>
-                <th scope="col" className="text-xs text-mist uppercase">Premium</th>
+                <th scope="col" className="text-xs text-mist uppercase">Member</th>
+                <th scope="col" className="text-xs text-mist uppercase">Scope</th>
                 <th scope="col" className="text-xs text-mist uppercase">Status</th>
-                <th scope="col" className="text-xs text-mist uppercase">Expires</th>
+                <th scope="col" className="text-xs text-mist uppercase">Activated</th>
               </tr>
             </thead>
             <tbody>
-              {policies.map((p) => (
-                <tr key={p.id} className="border-b border-edge/40 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs text-mist tnum">{p.user_email || p.user_id}</td>
-                  <td className="px-4 py-3 text-sm text-bright">{p.token_code}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gold tnum">{String(p.coverage_amount)} USDT</td>
-                  <td className="px-4 py-3 font-mono text-xs text-bright tnum">{String(p.premium_paid)} USDT</td>
-                  <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${p.status === 'active' ? 'border-success/40 bg-success/10 text-success' : p.status === 'claimed' ? 'border-gold/40 bg-gold/10 text-gold' : 'border-text/20 bg-text/5 text-mist'}`}>{p.status}</span></td>
-                  <td className="px-4 py-3 font-mono text-xs text-mist tnum">{p.expires_at ? new Date(p.expires_at).toLocaleDateString() : '—'}</td>
+              {members.map((m) => (
+                <tr key={m.id} className="border-b border-edge/40 last:border-0">
+                  <td className="px-4 py-3 font-mono text-xs text-mist tnum">{m.email || m.id}</td>
+                  <td className="px-4 py-3 text-sm text-bright">Account</td>
+                  <td className="px-4 py-3"><span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-success">active</span></td>
+                  <td className="px-4 py-3 font-mono text-xs text-mist tnum">{m.insurance_activated_at ? new Date(m.insurance_activated_at).toLocaleDateString() : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -91,7 +99,7 @@ function AdminInsurancePage() {
             <thead>
               <tr>
                 <th scope="col" className="text-xs text-mist uppercase">User</th>
-                <th scope="col" className="text-xs text-mist uppercase">Policy</th>
+                <th scope="col" className="text-xs text-mist uppercase">Scope</th>
                 <th scope="col" className="text-xs text-mist uppercase">Amount</th>
                 <th scope="col" className="text-xs text-mist uppercase">Reason</th>
                 <th scope="col" className="text-xs text-mist uppercase">Status</th>
@@ -103,7 +111,8 @@ function AdminInsurancePage() {
               {claims.map((c) => (
                 <tr key={c.id} className="border-b border-edge/40 last:border-0">
                   <td className="px-4 py-3 font-mono text-xs text-mist tnum">{c.user_email || c.user_id}</td>
-                  <td className="px-4 py-3 text-sm text-bright">{c.token_code || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-bright">{c.policy_id ? 'Legacy policy' : 'Account'}</td>
+
                   <td className="px-4 py-3 font-mono text-xs text-bright tnum">{String(c.amount)} USDT</td>
                   <td className="px-4 py-3 font-mono text-xs text-mist">{c.reason.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${c.status === 'approved' ? 'border-success/40 bg-success/10 text-success' : c.status === 'rejected' ? 'border-text/20 bg-text/5 text-mist' : 'border-gold/40 bg-gold/10 text-gold'}`}>{c.status}</span></td>

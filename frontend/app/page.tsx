@@ -3,39 +3,39 @@ import RiskStrip from '@/components/RiskStrip';
 import TargetCalculator from '@/components/TargetCalculator';
 import {
   STAGES,
-  REFERRAL_CATEGORIES,
-  PLATFORM_RULES,
-  bpsToPct,
+  LOCK_TERMS,
+  REFERRAL_REWARDS,
+  REGISTRATION_SPLIT,
   usdt,
 } from '@/lib/plan';
 
 const KPI = [
-  { value: '1.0%', unit: '/ day', label: 'Target value appreciation', tone: 'text-gold' },
-  { value: '7 & 14', unit: 'days', label: 'Fixed token lock terms', tone: 'text-bright' },
+  { value: '0.60–1.00%', unit: '/ day', label: 'Target rate by lock term', tone: 'text-gold' },
+  { value: '7 · 14 · 30', unit: 'days', label: 'Fixed token lock terms', tone: 'text-bright' },
   { value: '5', unit: 'stages', label: 'Progressive participation tiers', tone: 'text-success' },
-  { value: '5', unit: 'gens', label: 'Referral generations, when funded', tone: 'text-[#3B82F6]' },
+  { value: '3', unit: 'gens', label: 'Referral generations, when funded', tone: 'text-[#3B82F6]' },
 ];
 
 const STEPS = [
   {
     n: '01',
     title: 'Register & activate',
-    body: 'Create an account and activate membership. Activation is a recorded 20 USDT fee — nothing is charged until fees are switched on.',
+    body: 'Create an account and activate membership. Registration is a recorded $20 USDT fee, split across referrals, the leadership pool, processing and administration.',
   },
   {
     n: '02',
-    title: 'Lock a cycle',
-    body: 'Choose 7 days (+7% target) or 14 days (+14% target) at 1% per day, simple and non-compounded. Your stage sets the purchase ceiling.',
+    title: 'Choose stage & term',
+    body: 'Pick the stage that matches your locking amount and pay its entry fee. Choose 7 days (4.20% target), 14 days (10.50%) or 30 days (30.00%), simple and non-compounded.',
   },
   {
     n: '03',
-    title: 'List at maturity',
-    body: 'At maturity the position auto-lists at its target price. Multiple buyers can take small portions; you settle per portion. A listing is not a sale.',
+    title: 'Choose settlement',
+    body: 'Select marketplace settlement at maturity, or the company-funded option where 10% of the projected profit is charged and the company reserve settles you.',
   },
   {
     n: '04',
-    title: 'Advance a stage',
-    body: 'Build 42 cumulative lock days — 6 × 7-day or 3 × 14-day cycles — to move up. Higher stages widen limits and generations.',
+    title: 'Track maturity',
+    body: 'Keep the transaction record and follow the maturity date and settlement status. A marketplace listing is not a sale until a buyer pays.',
   },
 ];
 
@@ -45,7 +45,7 @@ export default function Home() {
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="hero-glow relative overflow-hidden rounded-3xl border border-edge/70 bg-surface px-6 py-12 sm:px-10 sm:py-16">
         <div className="relative mx-auto max-w-3xl text-center">
-          <span className="eyebrow">Token purchase → timed lock → maturity → auto-list → partial fills → settlement</span>
+          <span className="eyebrow">Token purchase → timed lock → maturity → settlement</span>
 
           <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-bright sm:text-5xl lg:text-6xl">
             Trade. Connect.
@@ -55,9 +55,9 @@ export default function Home() {
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-mist sm:text-lg">
             Purchase tokens in USDT, lock them for{' '}
-            <strong className="font-semibold text-bright">7 or 14 days</strong>, then list at
-            maturity for partial fills. Every target price still needs a willing buyer —
-            a listing is not a sale.
+            <strong className="font-semibold text-bright">7, 14 or 30 days</strong>, then settle at
+            maturity through the marketplace or the company-funded option. Every target price still
+            needs a willing buyer — a listing is not a sale.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -76,7 +76,7 @@ export default function Home() {
           </div>
 
           <p className="mt-6 font-mono text-xs text-mist tnum">
-            Stage 1 from 50 USDT · 42 cumulative lock days per stage
+            Stage 1 from 50 USDT · $20 registration · 7, 14 or 30-day locks
           </p>
         </div>
       </section>
@@ -128,27 +128,27 @@ export default function Home() {
       <section aria-label="Target-price calculator" className="grid gap-4 lg:grid-cols-2">
         <TargetCalculator />
 
-        <div className="space-y-4">
-          {([7, 14] as const).map((d) => {
-            const mult = d === 7 ? PLATFORM_RULES.sevenDayTarget : PLATFORM_RULES.fourteenDayTarget;
-            return (
-              <div key={d} className="rounded-2xl border border-edge/70 bg-surface p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-base font-bold text-bright">{d}-day cycle</h3>
-                  <span className="text-xs font-bold">Target</span>
-                </div>
-                <p className="mt-3 font-mono text-sm text-mist tnum">
-                  100.00 <span className="text-mist">→</span>{' '}
-                  <span className="text-lg font-bold text-gold">{usdt(100 * mult)}</span>{' '}
-                  <span className="text-success">(+{((mult - 1) * 100).toFixed(0)}%)</span>
-                </p>
-                <p className="mt-2 text-xs leading-relaxed text-mist">
-                  {d} days at 1% per day, simple and non-compounded. The target is a listing
-                  price, not a payout — it is only realised if a buyer takes the position.
-                </p>
+        <div className="space-y-3">
+          {LOCK_TERMS.map((t) => (
+            <div key={t.days} className="rounded-2xl border border-edge/70 bg-surface p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-base font-bold text-bright">{t.days}-day cycle</h3>
+                <span className="text-xs font-bold text-success">
+                  +{(t.termRate * 100).toFixed(2)}% target
+                </span>
               </div>
-            );
-          })}
+              <p className="mt-2 font-mono text-sm text-mist tnum">
+                100.00 <span className="text-mist">→</span>{' '}
+                <span className="text-lg font-bold text-gold">{usdt(100 * t.target)}</span>{' '}
+                <span className="text-mist">({(t.ratePerDay * 100).toFixed(2)}%/day)</span>
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-mist">
+                {t.days} days at {(t.ratePerDay * 100).toFixed(2)}% per day, simple and
+                non-compounded. The target is a settlement price, not a payout — it is only
+                realised if a buyer takes the position or the company-funded option applies.
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -161,8 +161,8 @@ export default function Home() {
               Five stages
             </h2>
             <p className="mt-2 max-w-xl text-sm text-mist">
-              Every stage requires the same 42 cumulative lock days — 6 × 7-day or 3 × 14-day
-              cycles. What changes is the ceiling and how many generations you can qualify for.
+              Choose the stage that matches your eligible locking amount. Each stage fee is paid
+              once when entering that stage; Stage 1&apos;s $20 fee is the registration fee.
             </p>
           </div>
           <Link href="/stages" className="text-sm font-semibold text-gold hover:underline">
@@ -188,7 +188,7 @@ export default function Home() {
               </div>
               <h3 className="mt-1.5 font-display text-base font-bold text-bright">{s.name}</h3>
               <p className="mt-2 font-mono text-xs text-mist tnum">
-                {usdt(s.minBuy, 0)} – {usdt(s.maxBuy, 0)} USDT
+                {usdt(s.minBuy, 2)} – {usdt(s.maxBuy, 0)} USDT
               </p>
               <dl className="mt-3 space-y-1 text-[11px] text-mist">
                 <div className="flex justify-between gap-2">
@@ -196,14 +196,8 @@ export default function Home() {
                   <dd className="font-mono font-semibold text-bright tnum">{s.generations}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt>Upgrade</dt>
-                  <dd className="font-mono font-semibold text-bright tnum">
-                    {s.upgradeFee === 0 ? '—' : `${usdt(s.upgradeFee, 0)}`}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Renewal</dt>
-                  <dd className="font-mono font-semibold text-bright tnum">{usdt(s.renewalFee, 0)}</dd>
+                  <dt>{s.stage === 1 ? 'Registration' : 'Entry fee'}</dt>
+                  <dd className="font-mono font-semibold text-bright tnum">{usdt(s.entryFee, 0)}</dd>
                 </div>
               </dl>
             </div>
@@ -211,49 +205,72 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Referral categories ──────────────────────────────── */}
-      <section aria-label="Referral compensation categories">
+      {/* ── Referral structure ───────────────────────────────── */}
+      <section aria-label="Referral compensation">
         <div className="mb-6">
           <span className="eyebrow">Compensation</span>
           <h2 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-bright sm:text-3xl">
-            Eight approved categories
+            Three referral generations
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-mist">
-            Categories are defined and versioned, but <strong className="text-bright">none are
-            active</strong>. A category pays only after it is approved and funded, and only on
-            verified sales — never on recruitment.
+            Each eligible $20 registration allocates <strong className="text-bright">$5</strong> to
+            the direct referrer, <strong className="text-bright">$2</strong> to the second
+            generation and <strong className="text-bright">$1</strong> to the third. Rewards are
+            recorded but <strong className="text-bright">not active</strong> until approved and funded.
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-edge/70 bg-surface">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-edge/70 text-left text-[11px] uppercase tracking-wider text-mist">
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="hidden px-4 py-3 font-semibold sm:table-cell">Qualifying basis</th>
-                <th className="px-4 py-3 font-semibold">Scope</th>
-                <th className="px-4 py-3 text-right font-semibold">Rate</th>
-                <th className="px-4 py-3 text-right font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {REFERRAL_CATEGORIES.map((c) => (
-                <tr key={c.id} className="border-b border-edge/40 last:border-0">
-                  <td className="px-4 py-3 font-medium text-bright">{c.name}</td>
-                  <td className="hidden px-4 py-3 text-xs text-mist sm:table-cell">{c.basis}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-mist">{c.scope}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-bright tnum">
-                    {bpsToPct(c.rateBps)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="rounded-full border border-edge/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mist">
-                      Inactive
-                    </span>
-                  </td>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-2xl border border-edge/70 bg-surface">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-edge/70 text-left text-[11px] uppercase tracking-wider text-mist">
+                  <th className="px-4 py-3 font-semibold">Generation</th>
+                  <th className="px-4 py-3 font-semibold">Who qualifies</th>
+                  <th className="px-4 py-3 text-right font-semibold">Reward</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {REFERRAL_REWARDS.map((r) => (
+                  <tr key={r.generation} className="border-b border-edge/40 last:border-0">
+                    <td className="px-4 py-3 font-medium text-bright">{r.name}</td>
+                    <td className="px-4 py-3 text-xs text-mist">{r.basis}</td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-gold tnum">
+                      ${r.amountUsdt}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-edge/70 bg-surface">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-edge/70 text-left text-[11px] uppercase tracking-wider text-mist">
+                  <th className="px-4 py-3 font-semibold">$20 registration split</th>
+                  <th className="px-4 py-3 font-semibold">Purpose</th>
+                  <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {REGISTRATION_SPLIT.map((r) => (
+                  <tr key={r.key} className="border-b border-edge/40 last:border-0">
+                    <td className="px-4 py-3 font-medium text-bright">{r.label}</td>
+                    <td className="px-4 py-3 text-xs text-mist">{r.purpose}</td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-bright tnum">
+                      ${r.amountUsdt}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-ink/60">
+                  <td className="px-4 py-3 font-bold text-bright">Total</td>
+                  <td className="px-4 py-3 text-xs text-mist">Registration fee</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-gold tnum">$20</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -264,7 +281,8 @@ export default function Home() {
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-mist">
           Create an account, activate, and run a 7-day lock end to end. Every target price is a
-          listing price, not a payout — it is only realised if a buyer takes the position.
+          settlement price, not a payout — it is only realised if a buyer takes the position or the
+          company-funded option applies.
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <Link

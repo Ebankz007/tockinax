@@ -8,10 +8,10 @@ import ModuleEmpty from '@/components/ModuleEmpty';
 import { fetchModule, listOf, num, type CycleInfo, type ModuleState } from '@/lib/api';
 
 function CycleCard({ c, i }: { c: CycleInfo; i: number }) {
-  const total = num(c.total) || (c.cycle_days === 14 ? 3 * 14 : 6 * 7);
+  const total = num(c.total) || c.cycle_days || 0;
   const done = num(c.completed ?? c.progress);
   const pct = total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : 0;
-  const label = c.cycle_days === 14 ? '3×14' : '6×7';
+  const label = c.cycle_days ? `${c.cycle_days}-day` : 'lock';
   return (
     <article className="rounded-lg border border-line/10 bg-coal p-3" aria-label={`Cycle ${i + 1}`}>
       <div className="flex items-center justify-between gap-2">
@@ -25,7 +25,7 @@ function CycleCard({ c, i }: { c: CycleInfo; i: number }) {
       <div className="bar mt-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Cycle progress">
         <span style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-1 text-xs text-mist">{done} of {total} steps · status: {c.status || 'in progress'}</p>
+      <p className="mt-1 text-xs text-mist">{done} of {total} days · status: {c.status || 'in progress'}</p>
     </article>
   );
 }
@@ -45,8 +45,9 @@ function CyclesInner() {
       </h1>
       <div className="card space-y-3">
         <p className="text-sm text-mist">
-          7-day tokens run <strong className="text-white">6×7</strong> progress steps; 14-day tokens
-          run <strong className="text-white">3×14</strong>. Eligibility unlocks maturity and auto-listing.
+          Each cycle tracks a <strong className="text-white">7, 14 or 30-day</strong> lock day by day.
+          At maturity the position settles through the marketplace or the company-funded option you
+          selected when locking.
         </p>
         {mod.state === 'loading' && <p role="status">Loading cycles…</p>}
         {mod.state === 'deploying' && <ModuleEmpty title="Cycles module deploying." />}

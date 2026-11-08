@@ -38,7 +38,21 @@ async function simBalance(userId, db) {
      join token_listings l on l.id = f.listing_id where l.seller_id = $1`,
     [userId]
   ).catch(() => ({ rows: [{ tot: '0' }] }));
-  return funding.minus(new Decimal(spent.rows[0].tot)).minus(new Decimal(bought.rows[0].tot)).plus(new Decimal(sold.rows[0].tot));
+  // Company-funded settlement proceeds (admin-approved payout from the reserve).
+  // The ledger transaction's source_id is the holding id, so join through it.
+  const company = await q.query(
+    `select coalesce(sum(e.credit - e.debit),0)::text as bal
+     from ledger_entries e
+     join ledger_transactions t on t.id = e.tx_id
+     join token_holdings h on h.id = t.source_id
+     where e.account = 'LIAB:sim_usdt' and t.source_type = 'company_settlement' and h.user_id = $1`,
+    [userId]
+  ).catch(() => ({ rows: [{ bal: '0' }] }));
+  return funding
+    .minus(new Decimal(spent.rows[0].tot))
+    .minus(new Decimal(bought.rows[0].tot))
+    .plus(new Decimal(sold.rows[0].tot))
+    .plus(new Decimal(company.rows[0]?.bal || 0));
 }
 
 async function userStage(pool, userId) {
@@ -57,12 +71,13 @@ router.post('/purchase', async (req, res, next) => {
       cost_usdt: z.union([z.string(), z.number()]).optional(),
       lock_days: z.union([z.string(), z.number()]).optional(),
       cycle_days: z.union([z.string(), z.number()]).optional(),
+      settlement_option: z.enum(['marketplace', 'company_reserve']).optional(),
     }).passthrough().parse(req.body);
     const amtStr = String(raw.amount_usdt ?? raw.amount ?? raw.cost_usdt ?? '');
     const dayNum = Number(raw.lock_days ?? raw.cycle_days);
     if (!/^\d+(\.\d{1,4})?$/.test(amtStr)) return res.status(400).json({ error: 'invalid_amount' });
-    if (![7, 14].includes(dayNum)) return res.status(400).json({ error: 'invalid_lock_days' });
-    const b = { amount_usdt: amtStr, lock_days: dayNum };
+    if (![7, 14, 30].includes(dayNum)) return res.status(400).json({ error: 'invalid_lock_days' });
+    const b = { amount_usdt: amtStr, lock_days: dayNum, settlement_option: raw.settlement_option || 'marketplace' };
     const pool = getPool();
     const cost = new Decimal(b.amount_usdt);
     if (cost.lte(0)) return res.status(400).json({ error: 'invalid_amount' });
@@ -101,9 +116,9 @@ router.post('/purchase', async (req, res, next) => {
     // Purchases are queued for manual admin review. No ledger movement and no
     // participation cycle are created until an admin approves the purchase.
     const h = await pool.query(
-      `insert into token_holdings (id, user_id, token_code, qty, cost_usdt, lock_days, status, purchased_at, matures_at)
-       values ($1,$2,'TKX',$3,$4,$5,'pending_approval',now(),$6) returning *`,
-      [holdingId, req.user.id, cost.toFixed(4), cost.toFixed(4), b.lock_days, mat.toISOString()]
+      `insert into token_holdings (id, user_id, token_code, qty, cost_usdt, lock_days, status, settlement_option, purchased_at, matures_at)
+       values ($1,$2,'TKX',$3,$4,$5,'pending_approval',$6,now(),$7) returning *`,
+      [holdingId, req.user.id, cost.toFixed(4), cost.toFixed(4), b.lock_days, b.settlement_option, mat.toISOString()]
     );
     res.status(201).json({
       holding: h.rows[0],
@@ -167,10 +182,10 @@ router.get('/stage/me', async (req, res, next) => {
       limits: def ? { min_buy: def.min_buy, max_buy: def.max_buy } : null,
       requirements: def ? { req_cycles_7d: def.req_cycles_7d, req_cycles_14d: def.req_cycles_14d } : null,
       upgrade: nextDef
-        ? { to_stage: nextStage, fee: def ? def.upgrade_fee : null, fee_unset: (def ? def.upgrade_fee : null) == null }
+        ? { to_stage: nextStage, fee: nextDef.upgrade_fee, fee_unset: nextDef.upgrade_fee == null }
         : null,
       renewal: def ? { fee: def.renewal_fee, fee_unset: def.renewal_fee == null } : null,
-      note: 'Upgrade fee is the fee to LEAVE the current stage. NULL fees are unpublished — upgrade/renewal blocked until disclosed.',
+      note: 'Upgrade fee is the fee to ENTER the next stage (approved plan). NULL fees are unpublished — upgrade/renewal blocked until disclosed.',
     });
   } catch (e) { next(e); }
 });
@@ -186,10 +201,10 @@ router.post('/stage/request', async (req, res, next) => {
     if (b.kind === 'upgrade') {
       if (stage >= 5) return res.status(409).json({ error: 'max_stage' });
       toStage = stage + 1;
-      const nd = await pool.query(`select 1 from stage_definitions where stage=$1`, [toStage]);
+      const nd = await pool.query(`select upgrade_fee from stage_definitions where stage=$1`, [toStage]);
       if (!nd.rowCount) return res.status(404).json({ error: 'stage_not_found' });
-      // Approved plan: the upgrade fee to leave the CURRENT stage (stage 5 = 0 / cannot leave).
-      fee = def?.upgrade_fee ?? null;
+      // Approved plan: each fee is paid once when ENTERING that stage.
+      fee = nd.rows[0]?.upgrade_fee ?? null;
     } else {
       fee = def?.renewal_fee ?? null;
     }

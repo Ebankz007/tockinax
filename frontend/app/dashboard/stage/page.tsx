@@ -14,7 +14,7 @@ const limitText = (l?: { min_buy?: string | number | null; max_buy?: string | nu
 
 function StageInner() {
   const [mod, setMod] = useState<ModuleState<StageInfo>>({ state: 'loading' });
-  const [busy, setBusy] = useState<'up' | 're' | null>(null);
+  const [busy, setBusy] = useState<'up' | null>(null);
   const [ok, setOk] = useState('');
   const [error, setError] = useState('');
 
@@ -24,21 +24,19 @@ function StageInner() {
 
   const stage = mod.state === 'live' ? mod.data : null;
   const current = stage?.current ?? stage?.stage ?? null;
-  // Approved plan: the upgrade fee is the fee to LEAVE the current stage (absent at the top stage).
+  // Approved plan: the upgrade fee is the fee to ENTER the next stage.
   const upgradeFee = stage?.upgrade?.fee ?? stage?.upgrade_fee ?? null;
-  const renewalFee = stage?.renewal?.fee ?? stage?.renew_fee ?? null;
   const atTop = current != null && current >= 5;
   const upgradeUnset = !stage || atTop || stage.upgrade?.fee_unset === true || upgradeFee == null;
-  const renewalUnset = !stage || stage.renewal?.fee_unset === true || renewalFee == null;
 
-  async function act(kind: 'up' | 're') {
+  async function act(kind: 'up') {
     setBusy(kind);
     setOk('');
     setError('');
     try {
-      const path = kind === 'up' ? '/tokens/stages/upgrade' : '/tokens/stages/renew';
+      const path = '/tokens/stages/upgrade';
       await api.post(path, {});
-      setOk(kind === 'up' ? 'Upgrade requested (pending review).' : 'Renewal requested (pending review).');
+      setOk('Upgrade requested (pending review).');
     } catch (e) {
       if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) {
         setError('Stage module deploying — action unavailable. Nothing was charged.');
@@ -69,26 +67,22 @@ function StageInner() {
               <thead><tr><th scope="col">Action</th><th scope="col">Fee</th></tr></thead>
               <tbody>
                 <tr>
-                  <td className="text-white">Upgrade {atTop ? '' : '(to leave your current stage)'}</td>
+                  <td className="text-white">Upgrade {atTop ? '' : '(entry fee for the next stage)'}</td>
                   <td className="text-gold">{atTop ? 'Top stage — none' : money(upgradeFee)}</td>
                 </tr>
-                <tr><td className="text-white">Renewal (current stage)</td><td className="text-gold">{money(renewalFee)}</td></tr>
               </tbody>
             </table>
             <p className="text-sm text-mist">
               Buy limits: <strong className="text-white">{limitText(stage.limits)}</strong>
             </p>
-            {(upgradeUnset || renewalUnset) && (
+            {upgradeUnset && !atTop && (
               <p className="alert-info" role="status">
-                A fee is not published for {atTop ? 'an upgrade' : 'this action'}. Requests stay disabled until it is disclosed.
+                The next stage fee is not published. Requests stay disabled until it is disclosed.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
               <button className="btn-primary" disabled={busy !== null || upgradeUnset} onClick={() => act('up')}>
                 {busy === 'up' ? 'Submitting…' : 'Upgrade stage'}
-              </button>
-              <button className="btn-secondary" disabled={busy !== null || renewalUnset} onClick={() => act('re')}>
-                {busy === 're' ? 'Submitting…' : 'Renew stage'}
               </button>
             </div>
             <p className="text-sm text-mist">

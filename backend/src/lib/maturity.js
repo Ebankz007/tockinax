@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const { Decimal } = require('decimal.js');
 const { getPool } = require('./db');
+const { postBalanced } = require('./ledger');
 const { priceSimple } = require('./tokenPricing');
 
 // Pure helpers (hermetic, unit-tested)
@@ -17,6 +18,17 @@ function isFillComplete(remainingQty) {
   return new Decimal(remainingQty).equals(0);
 }
 
+// Company-funded settlement: 10% of the projected profit is charged, and the
+// member receives cost + 90% of profit at maturity.
+function companySettlement(costUsdt, totalUsdt) {
+  const cost = new Decimal(costUsdt);
+  const total = new Decimal(totalUsdt);
+  const profit = total.minus(cost);
+  const fee = profit.mul(new Decimal('0.10')).toDecimalPlaces(4, Decimal.ROUND_DOWN);
+  const net = total.minus(fee);
+  return { profit: profit.toFixed(4), fee: fee.toFixed(4), net: net.toFixed(4), total: total.toFixed(4) };
+}
+
 async function matureDue(db) {
   const pool = getPool();
   const q = db || pool;
@@ -26,6 +38,20 @@ async function matureDue(db) {
   let matured = 0;
   for (const h of due.rows) {
     try {
+      // Company-funded settlement is a manual admin payout from the company
+      // reserve (10% charge on profit). Mark it due; never auto-list it.
+      if (h.settlement_option === 'company_reserve') {
+        await q.query(
+          `update token_holdings set status='settlement_pending' where id=$1 and status='locked'`,
+          [h.id]
+        );
+        await q.query(
+          `update participation_cycles set matured_at=now(), status='matured' where holding_id=$1 and matured_at is null`,
+          [h.id]
+        );
+        matured++;
+        continue;
+      }
       // Idempotent: skip if listing already exists for this holding
       const ex = await q.query(`select id from token_listings where holding_id = $1`, [h.id]);
       if (ex.rowCount) {
@@ -78,4 +104,49 @@ async function settleDue(db) {
   return { settled };
 }
 
-module.exports = { matureDue, settleDue, isMatured, isFillComplete };
+// Admin-approved company-funded settlement. Pays the member from the company
+// reserve and books the 10%-of-profit charge as settlement revenue.
+async function settleCompanyHolding(holdingId, db) {
+  const pool = getPool();
+  const q = db || pool;
+  const h = await q.query(`select * from token_holdings where id=$1 for update`, [holdingId]);
+  if (!h.rowCount) throw Object.assign(new Error('not_found'), { status: 404 });
+  const holding = h.rows[0];
+  if (holding.settlement_option !== 'company_reserve') {
+    throw Object.assign(new Error('not_company_settlement'), { status: 409 });
+  }
+  if (holding.status !== 'settlement_pending') {
+    throw Object.assign(new Error('not_due_for_settlement'), { status: 409, status_detail: holding.status });
+  }
+  const rule = await q.query(
+    `select * from pricing_rules where active=true and lock_days=$1 and basis='simple' order by version desc limit 1`,
+    [holding.lock_days]
+  );
+  if (!rule.rowCount) throw Object.assign(new Error('no_active_pricing_rule'), { status: 503 });
+  const { total } = priceSimple(holding.cost_usdt, holding.lock_days, rule.rows[0].rate_bps_per_day);
+  const amt = companySettlement(holding.cost_usdt, total);
+
+  // postBalanced manages its own transaction; never nest it inside the caller's
+  // transaction (a nested BEGIN/COMMIT would commit the outer transaction early).
+  await postBalanced({
+    sourceType: 'company_settlement',
+    sourceId: holding.id,
+    currency: 'USDT',
+    memo: `company-funded settlement ${holding.id} (10% profit charge ${amt.fee})`,
+    idempotencyKey: `sim:company_settle:${holding.id}`,
+    lines: [
+      { account: 'SIM:usdt_clearing', debit: amt.total },
+      { account: 'LIAB:sim_usdt', credit: amt.net },
+      { account: 'REV:settlement_fees', credit: amt.fee },
+    ],
+  });
+
+  await q.query(`update token_holdings set status='settled' where id=$1`, [holding.id]);
+  await q.query(
+    `update participation_cycles set settled_at=now(), status='settled', success=true where holding_id=$1`,
+    [holding.id]
+  );
+  return { holding_id: holding.id, ...amt };
+}
+
+module.exports = { matureDue, settleDue, settleCompanyHolding, companySettlement, isMatured, isFillComplete };

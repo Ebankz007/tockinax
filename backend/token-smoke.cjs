@@ -1,8 +1,8 @@
 // TOCKINAX token-loop smoke (live DB, simulated money only):
 // register → sandbox deposit intent → simulate-pay → SIM funded → token purchase
-// → force maturity (dev-only SQL) → matureDue auto-list at 107 → partial buys
-// (400/300/240/200 scaled) → oversell rejected → cycle success → unsold visible
-// → compat aliases + admin gates + approved stage fees (pending request) + categories disabled.
+// → force maturity (dev-only SQL) → matureDue auto-list at the 14-day target → partial buys
+// → oversell rejected → cycle success → unsold visible → compat aliases + admin gates
+// + approved stage entry fees (pending request) + categories disabled.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const request = require('supertest');
 const { buildApp } = require('./src/app');
@@ -43,9 +43,9 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
   let r = await request(app).get('/api/v1/tokens/definitions').set('Authorization', 'Bearer ' + buyer.token);
   ok('definitions list TKX', r.status === 200 && r.body.items.some(x => x.code === 'TKX'), `-> ${r.status}`);
   r = await request(app).get('/api/v1/tokens/categories').set('Authorization', 'Bearer ' + buyer.token);
-  ok('8 categories all disabled', r.status === 200 && r.body.items.length === 8 && r.body.items.every(x => x.active === false), `n=${r.body.items.length}`);
+  ok('3 referral categories all disabled', r.status === 200 && r.body.items.length === 3 && r.body.items.every(x => x.active === false), `n=${r.body.items.length}`);
   r = await request(app).get('/api/v1/tokens/pricing-versions').set('Authorization', 'Bearer ' + buyer.token);
-  ok('pricing v1 7d+14d simple', r.status === 200 && r.body.items.length >= 2, `-> ${r.status}`);
+  ok('pricing v1 has 7d+14d+30d simple', r.status === 200 && r.body.items.length >= 3, `-> ${r.status}`);
 
   // sandbox deposit → simulate-pay → funded (frontend-shaped paths)
   r = await request(app).post('/api/v1/deposits/intents').set('Authorization', 'Bearer ' + seller.token)
@@ -65,7 +65,7 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
   r = await request(app).post('/api/v1/tokens/purchase').set('Authorization', 'Bearer ' + seller.token)
     .send({ amount: '500.0000', cycle_days: 14, agreed_risk: true });
   ok('purchase 201 (frontend fields, within stage-1 max)', r.status === 201 && r.body.pricing, `-> ${r.status} target=${r.body.pricing && r.body.pricing.total}`);
-  ok('target = 570 simple', r.body.pricing && Number(r.body.pricing.total) === 570, `total=${r.body.pricing && r.body.pricing.total}`);
+  ok('target = 552.50 simple (14d @ 75bps/day)', r.body.pricing && Number(r.body.pricing.total) === 552.5, `total=${r.body.pricing && r.body.pricing.total}`);
   const holdingId = r.body.holding.id;
   ok('purchase queued for admin approval', r.body.holding && r.body.holding.status === 'pending_approval', `status=${r.body.holding && r.body.holding.status}`);
 
@@ -83,19 +83,19 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
   const m = await matureDue();
   ok('matureDue matured', m.matured >= 1, `matured=${m.matured}`);
   const lst = await pool.query(`select * from token_listings where holding_id=$1`, [holdingId]);
-  ok('auto-list at 570', lst.rowCount === 1 && Number(lst.rows[0].target_value) === 570, `target=${lst.rows[0] && lst.rows[0].target_value}`);
+  ok('auto-list at 552.50', lst.rowCount === 1 && Number(lst.rows[0].target_value) === 552.5, `target=${lst.rows[0] && lst.rows[0].target_value}`);
   const listingId = lst.rows[0].id;
 
-  // fund buyer + partial buys 400/300/240/200 = 1140
+  // fund buyer + partial buys (4 portions summing 500 TKX)
   const mkIntent = async (user, amount) => {
     const i = await request(app).post('/api/v1/deposits/intent').set('Authorization', `Bearer ${user.token}`)
       .send({ purpose: 'token_purchase', amount, network: 'TRC20' });
     const id = i.body.intent ? i.body.intent.id : i.body.id;
     await request(app).post(`/api/v1/deposits/${id}/simulate-pay`).set('Authorization', `Bearer ${user.token}`).send({});
   };
-  // Plan §4 partial-resale semantics: listing is 500 TKX @ 1.14 = 570 USDT target.
-  // Buyers purchase TKX quantities; USDT value = qty x 1.14. Mirror partial portions:
-  // ~200/150/120/100 USDT => 175.4386 / 131.5789 / 105.2632 / 87.7193 TKX (= 500).
+  // Plan §4 partial-resale semantics: listing is 500 TKX @ 1.105 = 552.50 USDT target.
+  // Buyers purchase TKX quantities; USDT value = qty x 1.105. Mirror partial portions:
+  // ~193.34/144.66/116.29/98.21 USDT => 175.4386 / 131.5789 / 105.2632 / 87.7193 TKX (= 500).
   await mkIntent(buyer, '400.0000');
   await mkIntent(buyer, '300.0000');
   const buy = async (qty) => request(app).post(`/api/v1/tokenmarket/listings/${listingId}/buy`)
@@ -116,16 +116,16 @@ const ok = (n, c, x = '') => { if (c) { pass++; console.log(`PASS ${n} ${x}`); }
 
   // proceeds + unsold visibility (seller sold all here; buyer holdings unsold if any)
   r = await request(app).get('/api/v1/tokenmarket/proceeds').set('Authorization', 'Bearer ' + seller.token);
-  ok('proceeds 570 visible', r.status === 200, `-> ${r.status}`);
+  ok('proceeds 552.50 visible', r.status === 200, `-> ${r.status}`);
 
   // stage fees now approved: disclosed + pending stage_request created (201)
   r = await request(app).post('/api/v1/tokens/stage/request').set('Authorization', 'Bearer ' + seller.token).send({ kind: 'upgrade' });
-  ok('upgrade 201 fee disclosed (100 to leave stage 1)', r.status === 201 && Number(r.body.fee_disclosed) === 100, `-> ${r.status} fee=${r.body.fee_disclosed}`);
+  ok('upgrade 201 fee disclosed (25 to enter stage 2)', r.status === 201 && Number(r.body.fee_disclosed) === 25, `-> ${r.status} fee=${r.body.fee_disclosed}`);
   const stageReqId = r.body.id;
   r = await request(app).post('/api/v1/tokens/stages/upgrade').set('Authorization', 'Bearer ' + seller.token).send({});
   ok('upgrade alias idempotent replay 200 (same pending request)', r.status === 200 && r.body.id === stageReqId, `-> ${r.status}`);
   r = await request(app).post('/api/v1/tokens/stages/renew').set('Authorization', 'Bearer ' + seller.token).send({});
-  ok('renew alias 201 fee disclosed (25 to renew stage 1)', r.status === 201 && Number(r.body.fee_disclosed) === 25, `-> ${r.status} fee=${r.body.fee_disclosed}`);
+  ok('renew alias blocked 409 (approved plan publishes no renewal fee)', r.status === 409 && r.body.error === 'fee_unset', `-> ${r.status} ${JSON.stringify(r.body)}`);
   r = await request(app).get('/api/v1/tokens/stages/current').set('Authorization', 'Bearer ' + seller.token);
   ok('stages/current alias', r.status === 200 && r.body.current === 1, `-> ${r.status}`);
   r = await request(app).get('/api/v1/tokens/stages/config').set('Authorization', 'Bearer ' + seller.token);

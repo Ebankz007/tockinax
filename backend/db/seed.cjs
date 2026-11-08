@@ -53,16 +53,23 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     where r.name='seller' and p.key in ('listings.moderate')
     on conflict (role_id, permission_id) do nothing`);
 
+  // Approved plan: $20 USDT registration, split $5 direct / $2 gen-2 / $1 gen-3 /
+  // $2 leadership pool / $2 transaction charges / $8 administration.
   await pool.query(`insert into service_fees (key, amount, currency, description, refund_policy) values
-    ('registration', 0, 'USD', 'Community membership — covers onboarding + verification. Not an investment.', 'Refundable within 7 days if account never activated.')
-    on conflict (key) do update set description=excluded.description`);
+    ('registration', 20, 'USDT', 'USDT membership registration — $5 direct referral, $2 second generation, $1 third generation, $2 leadership pool, $2 transaction charges, $8 administration. Not an investment.', 'Refundable within 7 days if account never activated.')
+    on conflict (key) do update set amount=excluded.amount, currency=excluded.currency, description=excluded.description`);
 
-  // Commission proposal as INACTIVE versions — admin must explicitly activate with budget + basis
+  // Commission proposal as INACTIVE versions — admin must explicitly activate with budget + basis.
+  // Version 2 records the approved plan's three-generation registration rewards:
+  // $5 / $20 = 2500 bps, $2 / $20 = 1000 bps, $1 / $20 = 500 bps.
   await pool.query(`insert into commission_rules (version, level, rate_bps, basis, confirmation_days, active) values
     (1, 1, 500, 'eligible_verified_sales', 7, false),
     (1, 2, 300, 'eligible_verified_sales', 7, false),
-    (1, 3, 200, 'eligible_verified_sales', 7, false)
-    on conflict (version, level) do nothing`);
+    (1, 3, 200, 'eligible_verified_sales', 7, false),
+    (2, 1, 2500, 'eligible_registration', 7, false),
+    (2, 2, 1000, 'eligible_registration', 7, false),
+    (2, 3, 500, 'eligible_registration', 7, false)
+    on conflict (version, level) do update set rate_bps=excluded.rate_bps, basis=excluded.basis`);
 
   // Stage A (3-day) / Stage B (5-day) as DRAFT, unfunded, payouts blocked
   await pool.query(`insert into reward_campaigns (name, description, status, qualifying_activity, reward_rate_bps) values
@@ -84,39 +91,41 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('SIM:usdt_clearing','ASSET','USDT','Simulated USDT clearing account for token-marketplace settlement'),
     ('REV:insurance_premiums','REVENUE','USDT','Insurance premium revenue'),
     ('REV:insurance_reserve','REVENUE','USDT','Insurance claim reserve'),
-    ('LIAB:insurance_claims','LIABILITY','USDT','Approved insurance claim liability pending payout')
+    ('LIAB:insurance_claims','LIABILITY','USDT','Approved insurance claim liability pending payout'),
+    ('REV:settlement_fees','REVENUE','USDT','10% company-funded settlement charge on profit')
     on conflict (code) do nothing`);
 
   // ---- Token-marketplace pilot seeds (all DISABLED-by-default where financial) ----
   await pool.query(`insert into token_definitions (code, name, kind, total_supply, basis, rights, active) values
     ('TKX','TKX Token (standard)','STANDARD',10000000,'1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled','none — participation record', true)
     on conflict (code) do update set name=excluded.name, basis=excluded.basis, rights=excluded.rights`);
-  // Pricing v1: 100 bps/day simple => 700 bps term for 7d, 1400 bps term for 14d.
+  // Pricing v1 — approved plan: 7d 0.60%/day (4.20%), 14d 0.75%/day (10.50%),
+  // 30d 1.00%/day (30.00%). All simple (non-compounded).
   await pool.query(`insert into pricing_rules (version, lock_days, rate_bps_per_day, basis, active) values
-    (1, 7, 100, 'simple', true),
-    (1, 14, 100, 'simple', true)
+    (1, 7, 60, 'simple', true),
+    (1, 14, 75, 'simple', true),
+    (1, 30, 100, 'simple', true)
     on conflict (version, lock_days) do update set rate_bps_per_day=excluded.rate_bps_per_day, basis=excluded.basis, active=excluded.active`);
-  // Stage 1-5: APPROVED plan limits + fees. upgrade_fee is the fee to LEAVE that stage
-  // (stage 5 = 0 because the top stage cannot be left). req_cycles_* unchanged.
+  // Stage 1-5: APPROVED plan ranges + entry fees. `upgrade_fee` is the fee to ENTER
+  // that stage (Stage 1 = the $20 registration; Stage 2-5 = $25/$50/$100/$250).
+  // The plan publishes no renewal fee, so renewal_fee stays NULL (blocked until disclosed).
   await pool.query(`insert into stage_definitions (stage, name, min_buy, max_buy, req_cycles_7d, req_cycles_14d, upgrade_fee, renewal_fee) values
-    (1, 'Entry', 50, 500, 0, 0, 100, 25),
-    (2, 'Growth', 500, 2500, 6, 3, 250, 50),
-    (3, 'Advancement', 2500, 10000, 6, 3, 600, 120),
-    (4, 'Premium', 10000, 25000, 6, 3, 1500, 300),
-    (5, 'Elite', 25000, 100000, 6, 3, 0, 600)
+    (1, 'Entry', 50, 500, 0, 0, 20, null),
+    (2, 'Growth', 500.01, 2000, 0, 0, 25, null),
+    (3, 'Advanced', 2000.01, 5000, 0, 0, 50, null),
+    (4, 'Premium', 5000.01, 50000, 0, 0, 100, null),
+    (5, 'Elite', 50000.01, 100000, 0, 0, 250, null)
     on conflict (stage) do update set name=excluded.name, min_buy=excluded.min_buy, max_buy=excluded.max_buy, req_cycles_7d=excluded.req_cycles_7d, req_cycles_14d=excluded.req_cycles_14d, upgrade_fee=excluded.upgrade_fee, renewal_fee=excluded.renewal_fee`);
-  // APPROVED plan: 8 named commission categories + rates (rate_bps = percent x 100).
+  // APPROVED plan: three referral generations paid from each $20 registration:
+  // $5 direct (2500 bps), $2 second generation (1000 bps), $1 third generation (500 bps).
   // Rows stay INACTIVE (active=false): the plan is recorded; payouts remain gated until
   // approval + funding. The on-conflict update deliberately NEVER touches `active`.
+  await pool.query(`delete from commission_categories where id in
+    ('acquisition','marketplace_direct','retention','advancement_recognition','gen2','gen3','gen4','gen5')`);
   await pool.query(`insert into commission_categories (id, name, description, rate_bps, active) values
-    ('acquisition','Direct Customer Acquisition Reward','Gen 1 — 10% of eligible verified direct customer sales.',1000,false),
-    ('marketplace_direct','Direct Marketplace Activity Commission','Gen 1 — 5% of eligible verified direct marketplace activity.',500,false),
-    ('retention','Customer Retention Reward','Gen 1 & 2 — 3% retention reward on eligible verified sales.',300,false),
-    ('advancement_recognition','Stage Advancement Recognition','Gen 1-3 — 4% recognition on eligible verified sales.',400,false),
-    ('gen2','Second-Generation Marketplace Commission','Gen 2 — 3% of eligible verified marketplace sales.',300,false),
-    ('gen3','Third-Generation Marketplace Commission','Gen 3 — 2% of eligible verified marketplace sales.',200,false),
-    ('gen4','Fourth-Generation Marketplace Commission','Gen 4 — 1.5% of eligible verified marketplace sales.',150,false),
-    ('gen5','Fifth-Generation Marketplace Commission','Gen 5 — 1% of eligible verified marketplace sales.',100,false)
+    ('referral_gen1','Direct Referral Reward','Generation 1 — $5 of each eligible $20 registration.',2500,false),
+    ('referral_gen2','Second-Generation Referral Reward','Generation 2 — $2 of each eligible $20 registration.',1000,false),
+    ('referral_gen3','Third-Generation Referral Reward','Generation 3 — $1 of each eligible $20 registration.',500,false)
     on conflict (id) do update set name=excluded.name, description=excluded.description, rate_bps=excluded.rate_bps`);
 
   const pages = ['home','about','how-it-works','marketplace','fees','referrals','rewards','faq','contact','terms','privacy','refunds','market-rules'];
@@ -135,6 +144,14 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
   await pool.query(`insert into system_settings (key, value) values
     ('platform_fees', '{"activation_usdt":"20","withdrawal_usdt":"1","transfer_usdt":"0"}')
     on conflict (key) do nothing`);
+  // Approved $20 registration allocation — recorded; fee collection stays gated.
+  await pool.query(`insert into system_settings (key, value) values
+    ('registration_fee_split', '{"direct":"5","gen2":"2","gen3":"1","leadership":"2","transaction":"2","administration":"8","total":"20"}')
+    on conflict (key) do update set value=excluded.value`);
+  // Approved lock terms and daily target rates (recorded; targets are not guarantees).
+  await pool.query(`insert into system_settings (key, value) values
+    ('lock_terms', '{"7":{"rate_per_day":"0.0060","term":"0.0420"},"14":{"rate_per_day":"0.0075","term":"0.1050"},"30":{"rate_per_day":"0.0100","term":"0.3000"}}')
+    on conflict (key) do update set value=excluded.value`);
   await pool.query(`insert into feature_flags (key, enabled, description) values
     ('live_payments', false, 'Live money movement gate — needs legal + provider approval'),
     ('rewards_payouts', false, 'Company-funded reward payouts'),
