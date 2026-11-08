@@ -18,7 +18,10 @@ router.get('/pages/:slug', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// PUBLIC settings summary — never leaks secrets
+// PUBLIC settings summary — never leaks secrets.
+// The registration fee AMOUNT is shown to members (transparent pricing).
+// The internal revenue-sharing split (registration_fee_split) is deliberately
+// excluded — only authorized administrators may view it.
 router.get('/settings/public', async (req, res, next) => {
   try {
     const pool = getPool();
@@ -30,12 +33,21 @@ router.get('/settings/public', async (req, res, next) => {
       const f = await pool.query(`select key, enabled from feature_flags`);
       for (const row of f.rows) flags[row.key] = row.enabled;
     } catch { /* tables may be unseeded — fall back to defaults */ }
+
+    // Registration fee amount from the service_fees table (member-visible charge).
+    let registrationFee = null;
+    try {
+      const fr = await pool.query(`select amount, currency from service_fees where key = 'registration'`);
+      if (fr.rows.length) registrationFee = { amount: fr.rows[0].amount, currency: fr.rows[0].currency };
+    } catch { /* service_fees may be unseeded */ }
+
     res.json({
       platformName: (settings.branding && settings.branding.platformName) || 'TOCKINAX',
       company: (settings.branding && settings.branding.company) || 'TOCKINAX',
       domain: (settings.branding && settings.branding.domain) || null,
       allowedCurrencies: ALLOWED_CURRENCIES,
       fees: settings.fees || { registration: null, seller_activation: null, marketplace: null, note: 'see /api/v1/marketplace/fees' },
+      registrationFee,
       rewards_disabled: flags.rewards_enabled === true ? false : true,
       crypto_disabled: flags.crypto_enabled === true ? false : true,
       payoutsEnabled: flags.payouts_enabled === true,

@@ -388,4 +388,14 @@ router.post('/users/:id/insurance', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// GET /admin/settings — all system settings including internal fee splits.
+// Restricted to super_admin via the router-level adminOnly gate.
+router.get('/settings', async (_req, res, next) => {
+  try {
+    const pool = getPool();
+    const r = await pool.query(`select key, value from system_settings order by key`);
+    res.json({ settings: r.rows.reduce((acc, row) => { acc[row.key] = row.value; return acc; }, {}) });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
