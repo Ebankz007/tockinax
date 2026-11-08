@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { getPool } = require('../lib/db');
 const { authRequired } = require('../middleware/auth');
 const { postBalanced, Decimal } = require('../lib/ledger');
+const { eligibleBalance } = require('../lib/payoutEligibility');
 
 const router = express.Router();
 
@@ -43,18 +44,6 @@ async function dualThreshold() {
       return new Decimal(String(r.rows[0].value.dualApprovalAbove));
   } catch { /* unseeded */ }
   return new Decimal(process.env.PAYOUT_DUAL_APPROVAL_ABOVE || '1000');
-}
-
-async function eligibleBalance(userId, currency) {
-  const r = await getPool().query(
-    `select coalesce(sum(amount),0)::text as bal from (
-       select amount from commission_calculations where beneficiary_id = $1 and status = 'payable' and currency = $2
-       union all select amount from reward_calculations rc join reward_campaigns c on c.id = rc.campaign_id
-         where rc.user_id = $1 and rc.status = 'payable' and rc.currency = $2 and c.status = 'completed'
-     ) s`,
-    [userId, currency]
-  );
-  return new Decimal(r.rows[0].bal);
 }
 
 // GET /ledger/summary — revenue by account, liabilities, pending payouts
@@ -110,8 +99,9 @@ router.post('/payouts/:id/review', async (req, res, next) => {
       return res.json({ ok: true, status: 'rejected' });
     }
 
-    // approve — eligible balance must still cover the amount
-    const bal = await eligibleBalance(p.user_id, p.currency);
+    // approve — eligible balance must still cover the amount (exclude this
+    // request, which is itself already counted as outstanding)
+    const bal = await eligibleBalance(p.user_id, p.currency, p.id);
     if (bal.lessThan(new Decimal(p.amount)))
       return res.status(422).json({ error: 'insufficient_eligible', eligible: bal.toString() });
 

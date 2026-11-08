@@ -99,6 +99,13 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
   await pool.query(`insert into token_definitions (code, name, kind, total_supply, basis, rights, active) values
     ('TKX','TKX Token (standard)','STANDARD',10000000,'1 TKX = 1 USDT at mint/purchase; off-platform transfers disabled','none — participation record', true)
     on conflict (code) do update set name=excluded.name, basis=excluded.basis, rights=excluded.rights`);
+  // Retired legacy token code. The pilot token is TKX only. Delete the stale
+  // `TKX-SIM` definition when nothing references it; otherwise deactivate it so
+  // historical holdings keep a valid FK target. Never touches TKX.
+  await pool.query(`delete from token_definitions d
+    where d.code = 'TKX-SIM'
+      and not exists (select 1 from token_holdings h where h.token_code = d.code)`);
+  await pool.query(`update token_definitions set active = false where code = 'TKX-SIM'`);
   // Pricing v1 — approved plan: 7d 0.60%/day (4.20%), 14d 0.75%/day (10.50%),
   // 30d 1.00%/day (30.00%). All simple (non-compounded).
   await pool.query(`insert into pricing_rules (version, lock_days, rate_bps_per_day, basis, active) values
@@ -139,6 +146,11 @@ pool.on('connect', (c) => c.query('SET search_path TO gatedp2p, public').catch((
     ('allowed_currencies', '["USD","NGN"]'),
     ('payout_policy', '{"min_usd":"10","dual_approval_ngn":500000,"schedule":"manual_review"}')
     on conflict (key) do nothing`);
+  // Branding correction: an early seed wrote company = "MMITPS INC". Fix only that
+  // exact stale value and leave any admin-edited name/domain/company untouched.
+  await pool.query(`update system_settings
+    set value = jsonb_set(value, '{company}', to_jsonb('TOCKINAX'::text))
+    where key = 'platform' and value->>'company' = 'MMITPS INC'`);
   // APPROVED-PLAN RECORD ONLY: platform fees are recorded here but NOT enforced yet
   // (no purchase gating, no withdrawal deduction) until separately approved.
   await pool.query(`insert into system_settings (key, value) values

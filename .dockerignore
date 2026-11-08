@@ -19,3 +19,8 @@ backend/storage
 docs
 deploy
 *.md
+# Untracked local material must never enter the build context:
+# prototype folders and the source ZIP are not part of the production build.
+ooo
+tockinax 1st build
+*.zip

@@ -187,7 +187,6 @@ tokensCompat.get('/admin/kpis', async (req, res, next) => {
       cycles: await q(`select count(*) filter (where success)::int as success, count(*)::int as total from participation_cycles`),
       deposits: await q(`select count(*) filter (where status='confirmed')::int as confirmed, count(*) filter (where status in ('created','pending','confirming'))::int as pending from deposit_intents`),
       withdrawals: await q(`select count(*) filter (where status in ('requested','under_review','approved'))::int as pending from withdrawal_requests`),
-      simulated: true,
     });
   } catch (e) { next(e); }
 });
